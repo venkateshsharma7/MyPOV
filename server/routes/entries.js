@@ -8,7 +8,7 @@ import User from "../models/User.js";
 import auth from "../middleware/auth.js";
 import admin from "../middleware/admin.js";
 import validate from "../middleware/validate.js";
-import { actionLimiter } from "../middleware/rateLimit.js";
+import { actionLimiter } from "../middleware/ratelimit.js";
 
 const router = express.Router();
 
