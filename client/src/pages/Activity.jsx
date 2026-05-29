@@ -12,6 +12,8 @@ const BACKDROP_SIZE = "w300";   // for larger previews if needed
 
 // Activity type config (cinema themed)
 const ACTIVITY_CONFIG = {
+  log: { icon: "Film", label: "logged", color: "#d4af37" },
+  pov: { icon: "POV", label: "shared a POV on", color: "#d4af37" },
   review: { icon: "✍️", label: "wrote a review", color: "#d4af37" },
   rating: { icon: "⭐", label: "rated", color: "#d4af37" },
   like: { icon: "❤️", label: "liked", color: "#e05050" },
@@ -44,7 +46,9 @@ function Activity() {
     try {
       const url = cursor ? `/activity?cursor=${cursor}` : "/activity";
       const data = await apiFetch(url);
-      const newActivities = data.activities || [];
+      const newActivities = (data.activities || []).filter(
+        (activity) => activity?.user && activity?.entryId && activity?.movieTitle
+      );
       setActivities((prev) => (cursor ? [...prev, ...newActivities] : newActivities));
       setNextCursor(data.nextCursor || null);
       setHasMore(!!data.nextCursor);
@@ -76,29 +80,7 @@ function Activity() {
     [loading, hasMore, nextCursor, loadActivities]
   );
 
-  // Optimistic like/unlike
-  const handleLike = async (activityId, currentLiked) => {
-    setActivities((prev) =>
-      prev.map((act) =>
-        act._id === activityId
-          ? { ...act, liked: !currentLiked, likeCount: act.likeCount + (currentLiked ? -1 : 1) }
-          : act
-      )
-    );
-    try {
-      await apiFetch(`/activities/${activityId}/like`, { method: "POST" });
-    } catch (err) {
-      // rollback
-      setActivities((prev) =>
-        prev.map((act) =>
-          act._id === activityId
-            ? { ...act, liked: currentLiked, likeCount: act.likeCount + (currentLiked ? 1 : -1) }
-            : act
-        )
-      );
-      console.error("Like failed:", err);
-    }
-  };
+  const handleLike = () => {};
 
   // Group consecutive activities (same user, same target, same type)
   const groupedActivities = [];
@@ -107,11 +89,12 @@ function Activity() {
     const next = activities[i + 1];
     if (
       next &&
-      current.user._id === next.user._id &&
+      current.user?._id &&
+      current.user._id === next.user?._id &&
       current.targetId === next.targetId &&
       current.type === next.type
     ) {
-      if (!groupedActivities.length || groupedActivities[groupedActivities.length - 1].user._id !== current.user._id) {
+      if (!groupedActivities.length || groupedActivities[groupedActivities.length - 1].user?._id !== current.user._id) {
         groupedActivities.push({ ...current, groupedCount: 2 });
       } else {
         groupedActivities[groupedActivities.length - 1].groupedCount++;
@@ -230,6 +213,9 @@ function Activity() {
 
           <div className="space-y-4">
             {groupedActivities.map((activity, idx) => {
+              if (!activity?.user || !activity?.entryId || !activity?.movieTitle) {
+                return null;
+              }
               const isLast = idx === groupedActivities.length - 1;
               const config = ACTIVITY_CONFIG[activity.type] || ACTIVITY_CONFIG.rating;
               // TMDB image logic

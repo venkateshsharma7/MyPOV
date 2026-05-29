@@ -324,7 +324,15 @@ element={
 
 path="/activity"
 
-element={<Activity />}
+element={
+
+<ProtectedRoute>
+
+<Activity />
+
+</ProtectedRoute>
+
+}
 
 />
 
