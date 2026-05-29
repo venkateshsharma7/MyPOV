@@ -47,7 +47,7 @@ function AIBot() {
         ...prev,
         {
           role: "assistant",
-          text: "Gemini is not responding yet. Check your server .env key and restart the backend.",
+          text: err.message || "Gemini is not responding yet. Check your backend AI configuration.",
         },
       ]);
     } finally {

@@ -66,8 +66,39 @@ router.post("/chat", auth, async (req, res) => {
       model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
     });
   } catch (err) {
+    const status = err.response?.status;
+    const geminiMessage =
+      err.response?.data?.error?.message ||
+      err.response?.data?.message ||
+      err.message;
+
     console.error("Gemini bot failed:", err.response?.data || err.message);
-    res.status(500).json({ error: "Gemini bot failed" });
+
+    if (status === 400 || status === 404) {
+      return res.status(502).json({
+        error: "Gemini model/config is invalid. Check GEMINI_MODEL on Render.",
+        detail: geminiMessage,
+      });
+    }
+
+    if (status === 401 || status === 403) {
+      return res.status(502).json({
+        error: "Gemini API key was rejected. Check GEMINI_API_KEY on Render.",
+        detail: geminiMessage,
+      });
+    }
+
+    if (status === 429) {
+      return res.status(503).json({
+        error: "Gemini quota or rate limit reached. Try again later.",
+        detail: geminiMessage,
+      });
+    }
+
+    res.status(502).json({
+      error: "Gemini bot failed",
+      detail: geminiMessage,
+    });
   }
 });
 

@@ -1,8 +1,10 @@
 import axios from "axios";
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-const GEMINI_BASE_URL = process.env.GEMINI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta";
+const GEMINI_API_KEY = String(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim();
+const GEMINI_MODEL = String(process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
+const GEMINI_BASE_URL = String(
+  process.env.GEMINI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta"
+).trim();
 
 export function hasGeminiKey() {
   return Boolean(GEMINI_API_KEY);
