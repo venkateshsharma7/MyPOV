@@ -5,44 +5,53 @@ import { apiFetch } from "../api/client";
 import { CinematicPlaceholder } from "../utils/placeholderImage";
 import { getMoviePath } from "../utils/movieLinks";
 
-const RECOMMENDATIONS_CACHE_KEY = "mypov:recommendations";
-const RECOMMENDATIONS_CACHE_TTL = 10 * 60 * 1000;
+const RECOMMENDATIONS_CACHE_KEY = "mypov:recommendations:v2";
+const RECOMMENDATIONS_CACHE_TTL = 60 * 60 * 1000;
+
+function readCachedRecommendations() {
+  try {
+    const cached = localStorage.getItem(RECOMMENDATIONS_CACHE_KEY);
+    if (!cached) return null;
+
+    const parsed = JSON.parse(cached);
+    if (
+      Array.isArray(parsed.movies) &&
+      Date.now() - Number(parsed.cachedAt || 0) < RECOMMENDATIONS_CACHE_TTL
+    ) {
+      return parsed.movies;
+    }
+  } catch {
+    localStorage.removeItem(RECOMMENDATIONS_CACHE_KEY);
+  }
+
+  return null;
+}
 
 function Recommendations() {
-  const [movies, setMovies] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [movies, setMovies] = useState(() => readCachedRecommendations() || []);
+  const [loading, setLoading] = useState(() => !readCachedRecommendations());
   const [error, setError] = useState("");
   const loadingRef = useRef(false);
 
   const load = useCallback(async ({ force = false } = {}) => {
     if (loadingRef.current) return;
 
-    try {
-      const cached = sessionStorage.getItem(RECOMMENDATIONS_CACHE_KEY);
-      if (!force && cached) {
-        const parsed = JSON.parse(cached);
-        if (
-          Array.isArray(parsed.movies) &&
-          Date.now() - Number(parsed.cachedAt || 0) < RECOMMENDATIONS_CACHE_TTL
-        ) {
-          setMovies(parsed.movies);
-          setError("");
-          setLoading(false);
-          return;
-        }
-      }
-    } catch {
-      sessionStorage.removeItem(RECOMMENDATIONS_CACHE_KEY);
+    const cachedMovies = readCachedRecommendations();
+    if (!force && cachedMovies) {
+      setMovies(cachedMovies);
+      setError("");
+      setLoading(false);
+      return;
     }
 
     try {
       loadingRef.current = true;
-      setLoading(true);
+      setLoading(movies.length === 0);
       setError("");
       const data = await apiFetch("/recommendations");
       const nextMovies = Array.isArray(data) ? data : [];
       setMovies(nextMovies);
-      sessionStorage.setItem(
+      localStorage.setItem(
         RECOMMENDATIONS_CACHE_KEY,
         JSON.stringify({
           movies: nextMovies,
@@ -51,13 +60,15 @@ function Recommendations() {
       );
     } catch (err) {
       console.error("Recommendation error:", err);
-      setMovies([]);
+      if (movies.length === 0) {
+        setMovies([]);
+      }
       setError(err.message || "Failed to load recommendations");
     } finally {
       setLoading(false);
       loadingRef.current = false;
     }
-  }, []);
+  }, [movies.length]);
 
   useEffect(() => {
     load();
