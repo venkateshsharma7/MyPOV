@@ -1,36 +1,67 @@
 // src/components/Recommendations.jsx
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "../api/client";
 import { CinematicPlaceholder } from "../utils/placeholderImage";
 import { getMoviePath } from "../utils/movieLinks";
 
+const RECOMMENDATIONS_CACHE_KEY = "mypov:recommendations";
+const RECOMMENDATIONS_CACHE_TTL = 10 * 60 * 1000;
+
 function Recommendations() {
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const loadingRef = useRef(false);
 
-  async function load() {
+  const load = useCallback(async ({ force = false } = {}) => {
+    if (loadingRef.current) return;
+
     try {
+      const cached = sessionStorage.getItem(RECOMMENDATIONS_CACHE_KEY);
+      if (!force && cached) {
+        const parsed = JSON.parse(cached);
+        if (
+          Array.isArray(parsed.movies) &&
+          Date.now() - Number(parsed.cachedAt || 0) < RECOMMENDATIONS_CACHE_TTL
+        ) {
+          setMovies(parsed.movies);
+          setError("");
+          setLoading(false);
+          return;
+        }
+      }
+    } catch {
+      sessionStorage.removeItem(RECOMMENDATIONS_CACHE_KEY);
+    }
+
+    try {
+      loadingRef.current = true;
       setLoading(true);
       setError("");
       const data = await apiFetch("/recommendations");
-      setMovies(Array.isArray(data) ? data : []);
+      const nextMovies = Array.isArray(data) ? data : [];
+      setMovies(nextMovies);
+      sessionStorage.setItem(
+        RECOMMENDATIONS_CACHE_KEY,
+        JSON.stringify({
+          movies: nextMovies,
+          cachedAt: Date.now(),
+        })
+      );
     } catch (err) {
       console.error("Recommendation error:", err);
       setMovies([]);
       setError(err.message || "Failed to load recommendations");
     } finally {
       setLoading(false);
+      loadingRef.current = false;
     }
-  }
+  }, []);
 
   useEffect(() => {
     load();
-    const handleFocus = () => load();
-    window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
-  }, []);
+  }, [load]);
 
   function getPoster(movie) {
     if (movie?.poster) return movie.poster;
@@ -85,7 +116,7 @@ function Recommendations() {
               </p>
             </div>
             <button
-              onClick={load}
+              onClick={() => load({ force: true })}
               disabled={loading}
               style={{
                 ...styles.refreshBtn,
@@ -111,7 +142,7 @@ function Recommendations() {
                 <p style={styles.errorTitle}>Could not load recommendations</p>
                 <p style={styles.errorMsg}>{error}</p>
               </div>
-              <button onClick={load} style={styles.retryBtn}>Retry</button>
+              <button onClick={() => load({ force: true })} style={styles.retryBtn}>Retry</button>
             </div>
           )}
 
