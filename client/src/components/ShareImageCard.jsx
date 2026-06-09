@@ -47,8 +47,8 @@ function drawInitialsAvatar(ctx, username, cx, cy, radius) {
   // Gold ring
   ctx.beginPath();
   ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-  ctx.strokeStyle = "#d4af37";
-  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(212,175,55, 0.8)";
+  ctx.lineWidth = 2;
   ctx.stroke();
   ctx.restore();
 
@@ -64,8 +64,8 @@ function drawInitialsAvatar(ctx, username, cx, cy, radius) {
   ctx.font = `bold ${radius * 0.85}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(initials, cx, cy + 2);
-  ctx.textBaseline = "alphabetic";
+  // Add a slight optical vertical adjustment for standard fonts
+  ctx.fillText(initials, cx, cy + 2); 
   ctx.restore();
 }
 
@@ -99,26 +99,81 @@ export default function ShareImageCard({ entry, onClose }) {
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
-    // ── 2. AVATAR BUBBLE — sits on top edge of poster ─────────────────────────
+    // Coordinate Setup
     const AR = 46;     // avatar radius
     const AX = W / 2;
-    const AY = 140;    // avatar centre Y — poster starts at AY
+    const AY = 140;    // avatar centre Y
+    
+    const PW = 480;
+    const PH = 720;
+    const PX = (W - PW) / 2;
+    const PY = AY;     // poster top aligns perfectly with avatar center
 
-    // Resolve username from entry
+    // Resolve User & Poster Data
     const username = entry.user?.username || entry.username || null;
-
-    // Try to load a real avatar if available in entry; otherwise use initials
     const avatarSrc = entry.user?.avatar || entry.userAvatar || null;
-    const avatarImg = avatarSrc ? await loadImg(avatarSrc) : null;
+    const posterSrc = entry.poster
+      ? entry.poster
+      : entry.poster_path
+      ? `https://image.tmdb.org/t/p/w780${entry.poster_path}`
+      : null;
 
+    // Load Images concurrently
+    const [avatarImg, posterImg] = await Promise.all([
+      avatarSrc ? loadImg(avatarSrc) : Promise.resolve(null),
+      posterSrc ? loadImg(posterSrc) : Promise.resolve(null)
+    ]);
+
+    // ── 2. POSTER CARD (MUST DRAW BEFORE AVATAR FOR Z-INDEX) ──────────────────
+    // Shadow
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.6)";
+    ctx.shadowBlur = 40;
+    ctx.shadowOffsetY = 15;
+    rr(ctx, PX, PY, PW, PH, 16);
+    ctx.fillStyle = "#000";
+    ctx.fill();
+    ctx.restore();
+
+    // Poster Image
+    ctx.save();
+    rr(ctx, PX, PY, PW, PH, 16);
+    ctx.clip();
+    if (posterImg) {
+      const scale = Math.max(PW / posterImg.width, PH / posterImg.height);
+      const dw = posterImg.width * scale;
+      const dh = posterImg.height * scale;
+      ctx.drawImage(posterImg, PX + (PW - dw) / 2, PY + (PH - dh) / 2, dw, dh);
+    } else {
+      const g = ctx.createLinearGradient(PX, PY, PX + PW, PY + PH);
+      g.addColorStop(0, "#2a2040");
+      g.addColorStop(1, "#0d0b14");
+      ctx.fillStyle = g;
+      ctx.fillRect(PX, PY, PW, PH);
+      ctx.fillStyle = "rgba(212,175,55,0.5)";
+      ctx.font = "bold 36px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(entry.title || "", W / 2, PY + PH / 2);
+    }
+    ctx.restore();
+
+    // Poster border
+    ctx.save();
+    rr(ctx, PX, PY, PW, PH, 16);
+    ctx.strokeStyle = "rgba(255,255,255,0.06)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+
+    // ── 3. AVATAR BUBBLE (DRAWS OVER POSTER TOP EDGE) ─────────────────────────
     if (avatarImg) {
       // Drop shadow
       ctx.save();
       ctx.beginPath();
       ctx.arc(AX, AY, AR, 0, Math.PI * 2);
-      ctx.shadowColor = "rgba(0,0,0,0.7)";
-      ctx.shadowBlur = 14;
-      ctx.shadowOffsetY = 5;
+      ctx.shadowColor = "rgba(0,0,0,0.8)";
+      ctx.shadowBlur = 12;
+      ctx.shadowOffsetY = 4;
       ctx.fillStyle = "#000";
       ctx.fill();
       ctx.restore();
@@ -134,78 +189,24 @@ export default function ShareImageCard({ entry, onClose }) {
       ctx.drawImage(avatarImg, AX - dw / 2, AY - dh / 2, dw, dh);
       ctx.restore();
 
-      // Ring
+      // Inner/Outer Ring for definition
       ctx.save();
       ctx.beginPath();
       ctx.arc(AX, AY, AR, 0, Math.PI * 2);
-      ctx.strokeStyle = "#d4af37";
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = "rgba(255,255,255,0.1)";
+      ctx.lineWidth = 2;
       ctx.stroke();
       ctx.restore();
     } else {
-      // No real avatar → draw initials circle
+      // Fallback Initials Circle
       drawInitialsAvatar(ctx, username || "?", AX, AY, AR);
     }
-
-    // ── 3. POSTER CARD — top edge aligned with avatar centre ─────────────────
-    const PW = 480;
-    const PH = 720;
-    const PX = (W - PW) / 2;
-    const PY = AY;     // poster top = avatar centre so avatar "sits" on top
-    const PR = 16;
-
-    // Shadow
-    ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.6)";
-    ctx.shadowBlur = 40;
-    ctx.shadowOffsetY = 15;
-    rr(ctx, PX, PY, PW, PH, PR);
-    ctx.fillStyle = "#000";
-    ctx.fill();
-    ctx.restore();
-
-    // Poster image
-    const posterSrc = entry.poster
-      ? entry.poster
-      : entry.poster_path
-      ? `https://image.tmdb.org/t/p/w780${entry.poster_path}`
-      : null;
-    const posterImg = posterSrc ? await loadImg(posterSrc) : null;
-
-    ctx.save();
-    rr(ctx, PX, PY, PW, PH, PR);
-    ctx.clip();
-    if (posterImg) {
-      const scale = Math.max(PW / posterImg.width, PH / posterImg.height);
-      const dw = posterImg.width * scale;
-      const dh = posterImg.height * scale;
-      ctx.drawImage(posterImg, PX + (PW - dw) / 2, PY + (PH - dh) / 2, dw, dh);
-    } else {
-      const g = ctx.createLinearGradient(PX, PY, PX + PW, PY + PH);
-      g.addColorStop(0, "#2a2040");
-      g.addColorStop(1, "#0d0b14");
-      ctx.fillStyle = g;
-      ctx.fillRect(PX, PY, PW, PH);
-      ctx.fillStyle = "rgba(212,175,55,0.5)";
-      ctx.font = "bold 36px serif";
-      ctx.textAlign = "center";
-      ctx.fillText(entry.title || "", W / 2, PY + PH / 2);
-    }
-    ctx.restore();
-
-    // Poster border
-    ctx.save();
-    rr(ctx, PX, PY, PW, PH, PR);
-    ctx.strokeStyle = "rgba(255,255,255,0.06)";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.restore();
 
     // ── 4. TITLE ──────────────────────────────────────────────────────────────
     const TITLE_Y = PY + PH + 72;
     ctx.textAlign = "center";
     ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 52px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+    ctx.font = "bold 52px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
     let title = entry.title || "Untitled";
     while (ctx.measureText(title).width > W - 80 && title.length > 2) {
@@ -223,17 +224,21 @@ export default function ShareImageCard({ entry, onClose }) {
 
     const STAR_Y = TITLE_Y + 62;
     ctx.fillStyle = "#d4af37";
-    ctx.font = "50px serif";
+    // Sans-serif ensures crisp, uniform star icons across all operating systems
+    ctx.font = "48px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
     ctx.textAlign = "center";
     ctx.fillText(starStr, W / 2, STAR_Y);
 
-    // ── 6. USERNAME — below stars, muted, like Letterboxd ─────────────────────
+    // ── 6. USERNAME ───────────────────────────────────────────────────────────
     if (username) {
-      const USER_Y = STAR_Y + 48;
+      const USER_Y = STAR_Y + 45;
       ctx.fillStyle = "rgba(255,255,255,0.45)";
-      ctx.font = "500 26px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+      ctx.font = "600 20px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(`@${username}`, W / 2, USER_Y);
+      
+      // Add slight letter spacing simulation natively in canvas
+      const userText = `REVIEW BY @${username}`.toUpperCase().split('').join(String.fromCharCode(8202));
+      ctx.fillText(userText, W / 2, USER_Y);
     }
 
     // ── 7. BRANDING — "ON" + logo ─────────────────────────────────────────────
@@ -253,12 +258,12 @@ export default function ShareImageCard({ entry, onClose }) {
     if (logo && logo.naturalWidth > 0) {
       const LH = 60;
       const LW = (logo.naturalWidth / logo.naturalHeight) * LH;
-      ctx.drawImage(logo, W / 2 - LW / 2, BRAND_Y + 22, LW, LH);
+      ctx.drawImage(logo, W / 2 - LW / 2, BRAND_Y + 28, LW, LH);
     } else {
       ctx.fillStyle = "#d4af37";
       ctx.font = "bold 28px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("MY POV", W / 2, BRAND_Y + 62);
+      ctx.fillText("MY POV", W / 2, BRAND_Y + 68);
     }
 
     setReady(true);
