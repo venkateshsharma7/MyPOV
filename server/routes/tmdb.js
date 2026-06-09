@@ -125,6 +125,28 @@ router.get("/omdb", async (req, res) => {
 });
 
 /* ───────────────────────────────────────────────────── */
+/* 2b. OMDB DETAIL (fetch full info by imdbID)           */
+/* ───────────────────────────────────────────────────── */
+router.get("/omdb-detail", async (req, res) => {
+  const imdbID = req.query.id?.trim();
+  if (!imdbID) return res.status(400).json({ error: "imdbID required" });
+
+  try {
+    if (process.env.OMDB_KEY) {
+      const response = await axios.get("https://www.omdbapi.com/", {
+        params: { apikey: process.env.OMDB_KEY, i: imdbID, plot: "short" },
+        timeout: 15000
+      });
+      return res.json(response.data);
+    }
+    return res.status(503).json({ error: "OMDB key not configured" });
+  } catch (err) {
+    console.error("OMDB detail failed:", err.message);
+    res.status(500).json({ error: "OMDB detail fetch failed" });
+  }
+});
+
+/* ───────────────────────────────────────────────────── */
 /* 3. GENRES (movie + TV) – cached 24h                  */
 /* ───────────────────────────────────────────────────── */
 router.get("/genres", async (req, res) => {

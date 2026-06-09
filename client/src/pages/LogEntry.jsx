@@ -37,6 +37,7 @@ export default function LogEntry() {
   const [isPublic, setIsPublic] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [movieDetails, setMovieDetails] = useState(null);
 
   async function handleSearch(e) {
     const q = e.target.value;
@@ -56,16 +57,59 @@ export default function LogEntry() {
     }
   }
 
-  function selectMovie(movie) {
+  async function selectMovie(movie) {
     setTitle(movie.Title || "");
     setTmdbId(null);
     setType(movie.Type === "series" ? "tv" : "movie");
     setLanguage("");
-    setPoster(movie.Poster && movie.Poster !== "N/A" ? movie.Poster : "");
+    const posterUrl = movie.Poster && movie.Poster !== "N/A" ? movie.Poster : "";
+    setPoster(posterUrl);
     setBackdrop("");
     setGenres([]);
     setResults([]);
     setQuery("");
+    // Set basic details immediately
+    setMovieDetails({
+      year: movie.Year || "—",
+      type: movie.Type === "series" ? "TV Series" : "Film",
+      poster: posterUrl,
+      title: movie.Title || "",
+      imdbID: movie.imdbID || "",
+      plot: null,
+      runtime: null,
+      imdbRating: null,
+      director: null,
+      actors: null,
+      genre: null,
+    });
+    // Fetch enriched details if we have an imdbID
+    if (movie.imdbID) {
+      try {
+        const API = import.meta.env.VITE_API_URL;
+        const res = await fetch(`${API}/tmdb/omdb-detail?id=${movie.imdbID}`);
+        if (res.ok) {
+          const d = await res.json();
+          if (d.Response !== "False") {
+            setMovieDetails({
+              year: d.Year || movie.Year || "—",
+              type: d.Type === "series" ? "TV Series" : "Film",
+              poster: d.Poster && d.Poster !== "N/A" ? d.Poster : posterUrl,
+              title: d.Title || movie.Title || "",
+              imdbID: movie.imdbID,
+              plot: d.Plot && d.Plot !== "N/A" ? d.Plot : null,
+              runtime: d.Runtime && d.Runtime !== "N/A" ? d.Runtime : null,
+              imdbRating: d.imdbRating && d.imdbRating !== "N/A" ? d.imdbRating : null,
+              director: d.Director && d.Director !== "N/A" ? d.Director : null,
+              actors: d.Actors && d.Actors !== "N/A" ? d.Actors : null,
+              genre: d.Genre && d.Genre !== "N/A" ? d.Genre : null,
+            });
+            if (d.Poster && d.Poster !== "N/A") setPoster(d.Poster);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch movie details:", err);
+      }
+    }
   }
 
   async function handleSubmit(e) {
@@ -107,6 +151,7 @@ export default function LogEntry() {
       setType("movie");
       setIsPOV(false);
       setIsPublic(false);
+      setMovieDetails(null);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       console.error("Save failed:", err);
@@ -196,6 +241,13 @@ export default function LogEntry() {
       background: rgba(212,175,55,0.05);
       border-color: rgba(212,175,55,0.3);
     }
+    @keyframes slideInCard {
+      from { opacity: 0; transform: translateX(20px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    .movie-side-card {
+      animation: slideInCard 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
   `;
 
   return (
@@ -232,11 +284,17 @@ export default function LogEntry() {
         style={{
           position: "relative",
           zIndex: 1,
-          maxWidth: 560,
+          maxWidth: movieDetails ? 1000 : 560,
           margin: "0 auto",
           padding: "60px 28px 80px",
+          display: "flex",
+          gap: 40,
+          alignItems: "flex-start",
+          transition: "max-width 0.4s ease",
         }}
       >
+        {/* Form column */}
+        <div style={{ flex: 1, minWidth: 0 }}>
         {/* Header */}
         <div style={{ marginBottom: 40 }}>
           <span
@@ -632,6 +690,151 @@ export default function LogEntry() {
             </p>
           )}
         </form>
+        </div>{/* end form column */}
+
+        {/* Side movie card */}
+        {movieDetails && (
+          <div className="movie-side-card" style={{
+            width: 260,
+            flexShrink: 0,
+            position: "sticky",
+            top: 60,
+            alignSelf: "flex-start",
+          }}>
+            <div className="glass-card" style={{ overflow: "hidden" }}>
+              {/* Poster */}
+              <div style={{ position: "relative" }}>
+                <img
+                  src={movieDetails.poster || CinematicPlaceholder({ title: movieDetails.title, width: 260, height: 370 })}
+                  alt={movieDetails.title}
+                  style={{ width: "100%", height: 370, objectFit: "cover", display: "block" }}
+                  onError={(e) => { e.target.src = CinematicPlaceholder({ title: movieDetails.title, width: 260, height: 370 }); }}
+                />
+                {/* Type badge */}
+                <div style={{
+                  position: "absolute",
+                  top: 12,
+                  left: 12,
+                  background: "rgba(10,8,3,0.8)",
+                  backdropFilter: "blur(8px)",
+                  border: "1px solid rgba(212,175,55,0.3)",
+                  borderRadius: 30,
+                  padding: "4px 10px",
+                  fontSize: 10,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  color: "#d4af37",
+                  fontFamily: "'DM Mono', monospace",
+                }}>
+                  {movieDetails.type}
+                </div>
+                {/* IMDB rating badge */}
+                {movieDetails.imdbRating && (
+                  <div style={{
+                    position: "absolute",
+                    top: 12,
+                    right: 12,
+                    background: "rgba(212,175,55,0.15)",
+                    backdropFilter: "blur(8px)",
+                    border: "1px solid rgba(212,175,55,0.4)",
+                    borderRadius: 8,
+                    padding: "4px 10px",
+                    fontSize: 13,
+                    color: "#d4af37",
+                    fontFamily: "'DM Mono', monospace",
+                    fontWeight: 600,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                  }}>
+                    ★ {movieDetails.imdbRating}
+                  </div>
+                )}
+                {/* Gradient overlay */}
+                <div style={{
+                  position: "absolute",
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  height: 80,
+                  background: "linear-gradient(to top, rgba(10,8,3,0.95), transparent)",
+                }} />
+              </div>
+
+              {/* Details section */}
+              <div style={{ padding: "16px 18px 20px" }}>
+                <h3 style={{
+                  margin: "0 0 4px",
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontSize: 20,
+                  fontWeight: 500,
+                  color: "#f5f0e8",
+                  lineHeight: 1.2,
+                }}>
+                  {movieDetails.title}
+                </h3>
+                <p style={{
+                  margin: "0 0 12px",
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: 11,
+                  color: "rgba(212,175,55,0.6)",
+                  letterSpacing: "0.06em",
+                }}>
+                  {movieDetails.year}
+                  {movieDetails.runtime && <span> · {movieDetails.runtime}</span>}
+                </p>
+
+                {movieDetails.genre && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 12 }}>
+                    {movieDetails.genre.split(", ").map((g) => (
+                      <span key={g} style={{
+                        fontSize: 10,
+                        padding: "3px 8px",
+                        borderRadius: 20,
+                        background: "rgba(212,175,55,0.08)",
+                        border: "1px solid rgba(212,175,55,0.2)",
+                        color: "rgba(212,175,55,0.8)",
+                        fontFamily: "'DM Mono', monospace",
+                        letterSpacing: "0.06em",
+                      }}>
+                        {g}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {movieDetails.plot && (
+                  <p style={{
+                    margin: "0 0 12px",
+                    fontSize: 12,
+                    color: "rgba(245,240,232,0.6)",
+                    lineHeight: 1.6,
+                    fontFamily: "'Cormorant Garamond', serif",
+                    fontStyle: "italic",
+                  }}>
+                    {movieDetails.plot.length > 120 ? movieDetails.plot.slice(0, 120) + "…" : movieDetails.plot}
+                  </p>
+                )}
+
+                {movieDetails.director && (
+                  <div style={{ marginBottom: 6 }}>
+                    <span style={{ fontSize: 10, color: "rgba(212,175,55,0.5)", fontFamily: "'DM Mono', monospace", letterSpacing: "0.1em", textTransform: "uppercase" }}>Dir. </span>
+                    <span style={{ fontSize: 12, color: "rgba(245,240,232,0.75)", fontFamily: "'DM Mono', monospace" }}>{movieDetails.director}</span>
+                  </div>
+                )}
+
+                {movieDetails.actors && (
+                  <div>
+                    <span style={{ fontSize: 10, color: "rgba(212,175,55,0.5)", fontFamily: "'DM Mono', monospace", letterSpacing: "0.1em", textTransform: "uppercase" }}>Cast </span>
+                    <span style={{ fontSize: 11, color: "rgba(245,240,232,0.55)", fontFamily: "'DM Mono', monospace" }}>
+                      {movieDetails.actors.split(", ").slice(0, 3).join(", ")}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
