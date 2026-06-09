@@ -1,7 +1,7 @@
 // src/components/ShareImageCard.jsx
 // Letterboxd-style visual share card — poster-dominant layout with MyPOV logo
 import { useRef, useEffect, useState } from "react";
-import { MYPOV_LOGO_B64 } from "../assets/logoBase64";
+import myPOVLogoSrc from "../assets/MyPOV_Logo.png";
 
 const CARD_W = 630;
 const CARD_H = 1120;
