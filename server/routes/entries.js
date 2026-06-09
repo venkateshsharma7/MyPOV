@@ -304,16 +304,24 @@ router.post("/", auth, actionLimiter, [
   body("isPublic").optional().isBoolean(),
 ], validate, async (req, res) => {
   try {
-    const { title, rating, review, date, type, genres, language, pov, isPublic } = req.body;
-    const omdbData = await fetchOmdbDetails({ title, type });
+    const { title, rating, review, date, type, genres, language, pov, isPublic, poster, backdrop, tmdbId } = req.body;
+
+    // If the frontend already sent poster + tmdbId (user picked from search),
+    // use them directly — don't re-fetch by title which picks the wrong movie.
+    let omdbData = null;
+    if (!poster && !tmdbId) {
+      // Only fall back to OMDB lookup when no selection was made
+      omdbData = await fetchOmdbDetails({ title, type });
+    }
+
     const submittedGenres = normalizeGenres(genres);
     const fallbackGenres = normalizeGenres(omdbData?.genres);
     const entry = await Entry.create({
       user: req.user.id,
-      tmdbId: omdbData?.imdbId || null,
+      tmdbId: tmdbId || omdbData?.imdbId || null,
       title: title.trim(),
-      poster: omdbData?.poster || null,
-      backdrop: omdbData?.backdrop || null,
+      poster: poster || omdbData?.poster || null,
+      backdrop: backdrop || omdbData?.backdrop || null,
       rating: Number(rating),
       review: review?.trim() || "",
       date,
