@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { body, param } from "express-validator";
 import Entry from "../models/Entry.js";
 import Activity from "../models/Activity.js";
+import Comment from "../models/Comment.js";
 import User from "../models/User.js";
 import auth from "../middleware/auth.js";
 import admin from "../middleware/admin.js";
@@ -541,10 +542,61 @@ router.get("/:id", [param("id").isMongoId()], validate, async (req, res) => {
   }
 });
 
+router.put("/:id", auth, actionLimiter, [
+  param("id").isMongoId(),
+  body("rating").optional().isFloat({ min: 1, max: 10 }),
+  body("review").optional().isString().trim().isLength({ max: 5000 }),
+  body("date").optional().notEmpty(),
+  body("pov").optional().isBoolean(),
+  body("isPublic").optional().isBoolean(),
+], validate, async (req, res) => {
+  try {
+    const updates = {};
+    const editableFields = ["rating", "review", "date", "pov", "isPublic"];
+
+    editableFields.forEach((field) => {
+      if (req.body[field] !== undefined) updates[field] = req.body[field];
+    });
+
+    if (updates.rating !== undefined) updates.rating = Number(updates.rating);
+    if (updates.review !== undefined) updates.review = String(updates.review || "").trim();
+    if (updates.pov !== undefined) updates.pov = Boolean(updates.pov);
+    if (updates.isPublic !== undefined) updates.isPublic = Boolean(updates.isPublic);
+
+    const entry = await Entry.findOneAndUpdate(
+      { _id: req.params.id, user: req.user.id },
+      { $set: updates },
+      { new: true, runValidators: true }
+    ).populate("user", "username").lean();
+
+    if (!entry) return res.status(404).json({ error: "Entry not found" });
+
+    await Activity.updateMany(
+      { entry: entry._id, user: req.user.id },
+      {
+        $set: {
+          type: entry.review ? "review" : "log",
+          movieTitle: entry.title,
+          rating: entry.rating,
+        },
+      }
+    );
+
+    res.json(entry);
+  } catch (err) {
+    console.error("Update entry failed:", err);
+    res.status(500).json({ error: "Failed to update entry" });
+  }
+});
+
 router.delete("/:id", auth, [param("id").isMongoId()], validate, async (req, res) => {
   try {
     const deleted = await Entry.findOneAndDelete({ _id: req.params.id, user: req.user.id });
     if (!deleted) return res.status(404).json({ error: "Entry not found" });
+    await Promise.all([
+      Activity.deleteMany({ entry: deleted._id }),
+      Comment.deleteMany({ entry: deleted._id }),
+    ]);
     res.json({ message: "Entry deleted" });
   } catch (err) {
     res.status(500).json({ error: "Failed to delete entry" });
