@@ -171,95 +171,21 @@ router.get("/omdb", async (req, res) => {
 /* 2b. OMDB DETAIL (fetch full info by imdbID)           */
 /* ───────────────────────────────────────────────────── */
 router.get("/omdb-detail", async (req, res) => {
-  const rawId = req.query.id?.trim();
-  const mediaType = req.query.type?.trim() || "movie"; // "movie" or "tv"
-  if (!rawId) return res.status(400).json({ error: "id required" });
+  const imdbID = req.query.id?.trim();
+  if (!imdbID) return res.status(400).json({ error: "imdbID required" });
 
   try {
-    // Determine if this is a TMDB numeric ID or a real tt IMDb ID
-    const isTmdbId = /^\d+$/.test(rawId);
-    let imdbId = isTmdbId ? null : rawId;
-    let tmdbDetails = null;
-
-    // Step 1: If it's a TMDB ID, fetch TMDB details + external_ids in parallel
-    if (isTmdbId && process.env.TMDB_KEY) {
-      const [detailRes, extRes] = await Promise.allSettled([
-        fetchWithRetry(() =>
-          tmdb.get(`/${mediaType}/${rawId}`, {
-            params: { api_key: process.env.TMDB_KEY }
-          })
-        ),
-        fetchWithRetry(() =>
-          tmdb.get(`/${mediaType}/${rawId}/external_ids`, {
-            params: { api_key: process.env.TMDB_KEY }
-          })
-        ),
-      ]);
-
-      if (detailRes.status === "fulfilled") {
-        const d = detailRes.value.data;
-        tmdbDetails = {
-          Title: d.title || d.name || "",
-          Year: (d.release_date || d.first_air_date || "").slice(0, 4),
-          Runtime: d.runtime ? `${d.runtime} min` : (d.episode_run_time?.[0] ? `${d.episode_run_time[0]} min` : "N/A"),
-          Genre: (d.genres || []).map(g => g.name).join(", ") || "N/A",
-          Overview: d.overview || "N/A",
-          Poster: d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : "N/A",
-          VoteAverage: d.vote_average || 0,
-          Type: mediaType === "tv" ? "series" : "movie",
-          Response: "True",
-        };
-      }
-
-      if (extRes.status === "fulfilled") {
-        imdbId = extRes.value.data.imdb_id || null;
-      }
-    }
-
-    // Step 2: Fetch OMDB using real imdbId for rich details (plot, director, cast, rating)
-    if (imdbId && process.env.OMDB_KEY) {
-      try {
-        const omdbRes = await axios.get("https://www.omdbapi.com/", {
-          params: { apikey: process.env.OMDB_KEY, i: imdbId, plot: "short" },
-          timeout: 15000
-        });
-        const d = omdbRes.data;
-        if (d.Response !== "False") {
-          // Merge: OMDB wins for plot/director/actors/rating, TMDB fills gaps
-          return res.json({
-            ...tmdbDetails,
-            Title: d.Title || tmdbDetails?.Title || "",
-            Year: d.Year || tmdbDetails?.Year || "N/A",
-            Runtime: d.Runtime !== "N/A" ? d.Runtime : tmdbDetails?.Runtime || "N/A",
-            Genre: d.Genre !== "N/A" ? d.Genre : tmdbDetails?.Genre || "N/A",
-            Plot: d.Plot !== "N/A" ? d.Plot : tmdbDetails?.Overview || "N/A",
-            Director: d.Director || "N/A",
-            Actors: d.Actors || "N/A",
-            imdbRating: d.imdbRating || "N/A",
-            Poster: d.Poster !== "N/A" ? d.Poster : tmdbDetails?.Poster || "N/A",
-            Response: "True",
-          });
-        }
-      } catch (omdbErr) {
-        console.warn("OMDB detail fetch failed, falling back to TMDB:", omdbErr.message);
-      }
-    }
-
-    // Step 3: Fallback — return TMDB details only
-    if (tmdbDetails) {
-      return res.json({
-        ...tmdbDetails,
-        Plot: tmdbDetails.Overview,
-        Director: "N/A",
-        Actors: "N/A",
-        imdbRating: tmdbDetails.VoteAverage ? String(tmdbDetails.VoteAverage.toFixed(1)) : "N/A",
+    if (process.env.OMDB_KEY) {
+      const response = await axios.get("https://www.omdbapi.com/", {
+        params: { apikey: process.env.OMDB_KEY, i: imdbID, plot: "short" },
+        timeout: 15000
       });
+      return res.json(response.data);
     }
-
-    return res.status(404).json({ error: "No details found", Response: "False" });
+    return res.status(503).json({ error: "OMDB key not configured" });
   } catch (err) {
-    console.error("Detail fetch failed:", err.message);
-    res.status(500).json({ error: "Detail fetch failed" });
+    console.error("OMDB detail failed:", err.message);
+    res.status(500).json({ error: "OMDB detail fetch failed" });
   }
 });
 
