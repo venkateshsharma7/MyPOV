@@ -1,23 +1,24 @@
 // src/components/ShareImageCard.jsx
-// Letterboxd-style visual share card generator
+// Letterboxd-style visual share card — poster-dominant layout with MyPOV logo
 import { useRef, useEffect, useState } from "react";
+import { MYPOV_LOGO_B64 } from "../assets/logoBase64";
 
-const CARD_W = 480;
-const CARD_H = 720;
+const CARD_W = 630;
+const CARD_H = 1120;
 
-function StarRow({ rating }) {
-  const full = Math.floor(rating / 2);
-  const half = (rating % 2) >= 1;
-  const stars = [];
-  for (let i = 0; i < 5; i++) {
-    if (i < full) stars.push("★");
-    else if (i === full && half) stars.push("½");
-    else stars.push("☆");
-  }
-  return stars.join(" ");
+// ---- helpers ----------------------------------------------------------------
+
+function starString(rating) {
+  const r = Number(rating) || 0;
+  const full = Math.floor(r / 2);
+  const half = r % 2 >= 1;
+  let s = "★".repeat(full);
+  if (half) s += "½";
+  s += "☆".repeat(Math.max(0, 5 - full - (half ? 1 : 0)));
+  return s;
 }
 
-async function loadImage(src) {
+function loadImg(src) {
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -27,34 +28,54 @@ async function loadImage(src) {
   });
 }
 
-function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function wrapText(ctx, text, x, y, maxW, lh, maxLines = 4) {
   const words = text.split(" ");
   let line = "";
   let cy = y;
+  let lineCount = 0;
   for (let n = 0; n < words.length; n++) {
-    const testLine = line + words[n] + " ";
-    if (ctx.measureText(testLine).width > maxWidth && n > 0) {
+    const test = line + words[n] + " ";
+    if (ctx.measureText(test).width > maxW && n > 0) {
+      if (lineCount >= maxLines - 1) {
+        ctx.fillText(line.trimEnd() + "…", x, cy);
+        return cy + lh;
+      }
       ctx.fillText(line, x, cy);
       line = words[n] + " ";
-      cy += lineHeight;
+      cy += lh;
+      lineCount++;
     } else {
-      line = testLine;
+      line = test;
     }
   }
-  ctx.fillText(line, x, cy);
-  return cy + lineHeight;
+  ctx.fillText(line.trim(), x, cy);
+  return cy + lh;
 }
+
+// ---- component --------------------------------------------------------------
 
 export default function ShareImageCard({ entry, onClose }) {
   const canvasRef = useRef(null);
   const [generating, setGenerating] = useState(true);
-  const [shareStatus, setShareStatus] = useState("");
+  const [status, setStatus] = useState("");
 
-  useEffect(() => {
-    drawCard();
-  }, [entry]);
+  useEffect(() => { draw(); }, [entry]);
 
-  async function drawCard() {
+  async function draw() {
     setGenerating(true);
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -62,287 +83,249 @@ export default function ShareImageCard({ entry, onClose }) {
     canvas.width = CARD_W;
     canvas.height = CARD_H;
 
-    // Background gradient (dark cinema)
-    const bg = ctx.createLinearGradient(0, 0, 0, CARD_H);
-    bg.addColorStop(0, "#0e0c10");
-    bg.addColorStop(1, "#07060a");
-    ctx.fillStyle = bg;
+    // ── dark background ──────────────────────────────────────────────────────
+    ctx.fillStyle = "#0d0b0f";
     ctx.fillRect(0, 0, CARD_W, CARD_H);
 
-    // Gold border
-    ctx.strokeStyle = "rgba(212,175,55,0.5)";
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(10, 10, CARD_W - 20, CARD_H - 20);
-
-    // Load poster
-    const posterSrc = entry.poster || entry.poster_path
-      ? (entry.poster || `https://image.tmdb.org/t/p/w500${entry.poster_path}`)
+    // ── poster (full-width, rounded top) ─────────────────────────────────────
+    const POSTER_H = 780;
+    const POSTER_PAD = 18;
+    const posterSrc = entry.poster
+      ? entry.poster
+      : entry.poster_path
+      ? `https://image.tmdb.org/t/p/w500${entry.poster_path}`
       : null;
 
-    let posterImg = null;
-    if (posterSrc) {
-      // Use a CORS proxy for cross-origin images
-      posterImg = await loadImage(posterSrc);
-    }
+    const posterImg = posterSrc ? await loadImg(posterSrc) : null;
+
+    // clipping region for poster
+    ctx.save();
+    roundRect(ctx, POSTER_PAD, POSTER_PAD, CARD_W - POSTER_PAD * 2, POSTER_H, 18);
+    ctx.clip();
 
     if (posterImg) {
-      // Poster full width top portion
-      const posterH = 380;
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(10, 10, CARD_W - 20, posterH);
-      ctx.clip();
-      ctx.drawImage(posterImg, 10, 10, CARD_W - 20, posterH);
-      ctx.restore();
-
-      // Gradient fade over poster
-      const fade = ctx.createLinearGradient(0, posterH - 120, 0, posterH + 40);
-      fade.addColorStop(0, "rgba(7,6,10,0)");
-      fade.addColorStop(1, "rgba(7,6,10,1)");
-      ctx.fillStyle = fade;
-      ctx.fillRect(10, posterH - 120, CARD_W - 20, 160);
+      // cover-fit: scale so the image fills the area
+      const scale = Math.max(
+        (CARD_W - POSTER_PAD * 2) / posterImg.width,
+        POSTER_H / posterImg.height
+      );
+      const dw = posterImg.width * scale;
+      const dh = posterImg.height * scale;
+      const dx = POSTER_PAD + ((CARD_W - POSTER_PAD * 2) - dw) / 2;
+      const dy = POSTER_PAD + (POSTER_H - dh) / 2;
+      ctx.drawImage(posterImg, dx, dy, dw, dh);
     } else {
-      // Placeholder gradient block
-      const placeholderGrad = ctx.createLinearGradient(0, 0, CARD_W, 380);
-      placeholderGrad.addColorStop(0, "#1a1530");
-      placeholderGrad.addColorStop(1, "#0e0c10");
-      ctx.fillStyle = placeholderGrad;
-      ctx.fillRect(10, 10, CARD_W - 20, 380);
-
-      // Movie title as placeholder
-      ctx.fillStyle = "rgba(212,175,55,0.3)";
-      ctx.font = "bold 28px serif";
+      // gradient placeholder
+      const g = ctx.createLinearGradient(0, 0, CARD_W, POSTER_H);
+      g.addColorStop(0, "#1a1530");
+      g.addColorStop(1, "#0d0b0f");
+      ctx.fillStyle = g;
+      ctx.fillRect(POSTER_PAD, POSTER_PAD, CARD_W - POSTER_PAD * 2, POSTER_H);
+      ctx.fillStyle = "rgba(212,175,55,0.25)";
+      ctx.font = "bold 32px serif";
       ctx.textAlign = "center";
-      ctx.fillText(entry.title || "MyPOV", CARD_W / 2, 200);
+      ctx.fillText(entry.title || "MyPOV", CARD_W / 2, POSTER_PAD + POSTER_H / 2);
       ctx.textAlign = "left";
     }
 
-    const contentY = posterImg ? 410 : 420;
+    // fade at bottom of poster into dark bg
+    const fade = ctx.createLinearGradient(0, POSTER_PAD + POSTER_H - 220, 0, POSTER_PAD + POSTER_H);
+    fade.addColorStop(0, "rgba(13,11,15,0)");
+    fade.addColorStop(1, "rgba(13,11,15,0.92)");
+    ctx.fillStyle = fade;
+    ctx.fillRect(POSTER_PAD, POSTER_PAD + POSTER_H - 220, CARD_W - POSTER_PAD * 2, 220);
+
+    ctx.restore();
+
+    // ── info panel (below poster) ─────────────────────────────────────────────
+    const INFO_Y = POSTER_PAD + POSTER_H + 28;
 
     // Title
     ctx.fillStyle = "#f5f0e8";
-    ctx.font = "bold 26px Georgia, serif";
+    ctx.font = "bold 38px Georgia, serif";
     ctx.textAlign = "left";
     const titleText = entry.title || "Untitled";
-    const titleLines = titleText.length > 28 ? [titleText.slice(0, 28), titleText.slice(28, 56) + (titleText.length > 56 ? "…" : "")] : [titleText];
-    titleLines.forEach((line, i) => ctx.fillText(line, 28, contentY + i * 32));
-
-    const afterTitle = contentY + titleLines.length * 32 + 14;
-
-    // Year badge
-    if (entry.date) {
-      const yr = String(entry.date).slice(0, 4);
-      ctx.fillStyle = "rgba(212,175,55,0.15)";
-      const yrW = ctx.measureText(yr).width + 20;
-      ctx.beginPath();
-      ctx.roundRect(28, afterTitle - 2, yrW, 22, 11);
-      ctx.fill();
-      ctx.fillStyle = "#d4af37";
-      ctx.font = "12px 'Courier New', monospace";
-      ctx.fillText(yr, 38, afterTitle + 13);
+    // single-line or wrap at 2
+    const titleMaxW = CARD_W - POSTER_PAD * 2 - 20;
+    let titleEndY;
+    if (ctx.measureText(titleText).width <= titleMaxW) {
+      ctx.fillText(titleText, POSTER_PAD + 12, INFO_Y);
+      titleEndY = INFO_Y + 44;
+    } else {
+      titleEndY = wrapText(ctx, titleText, POSTER_PAD + 12, INFO_Y, titleMaxW, 46, 2);
     }
 
-    // Stars row
-    const starsY = afterTitle + 34;
+    // Stars
+    const STARS_Y = titleEndY + 14;
     ctx.fillStyle = "#d4af37";
-    ctx.font = "22px serif";
-    ctx.fillText(StarRow({ rating: entry.rating || 0 }), 28, starsY);
+    ctx.font = "30px serif";
+    ctx.fillText(starString(entry.rating), POSTER_PAD + 12, STARS_Y);
 
-    // Rating number
-    ctx.fillStyle = "rgba(212,175,55,0.7)";
-    ctx.font = "13px 'Courier New', monospace";
-    ctx.fillText(`${entry.rating || 0} / 10`, 28, starsY + 22);
+    // Rating number badge
+    const ratingLabel = `${entry.rating || 0}/10`;
+    const ratingX = POSTER_PAD + 12 + ctx.measureText(starString(entry.rating)).width + 14;
+    ctx.font = "bold 14px 'Courier New', monospace";
+    ctx.fillStyle = "rgba(212,175,55,0.75)";
+    ctx.fillText(ratingLabel, ratingX, STARS_Y - 2);
 
     // Divider
+    const DIV_Y = STARS_Y + 22;
     ctx.strokeStyle = "rgba(212,175,55,0.2)";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(28, starsY + 38);
-    ctx.lineTo(CARD_W - 28, starsY + 38);
+    ctx.moveTo(POSTER_PAD + 12, DIV_Y);
+    ctx.lineTo(CARD_W - POSTER_PAD - 12, DIV_Y);
     ctx.stroke();
 
     // Review excerpt
-    const review = String(entry.review || "No review written.").slice(0, 220);
-    const reviewText = review.length < (entry.review || "").length ? review + "…" : review;
+    const reviewRaw = String(entry.review || "No review written.").trim();
     ctx.fillStyle = "#a09c94";
-    ctx.font = "italic 14px Georgia, serif";
-    wrapText(ctx, `"${reviewText}"`, 28, starsY + 62, CARD_W - 56, 22);
+    ctx.font = "italic 16px Georgia, serif";
+    wrapText(ctx, `"${reviewRaw}"`, POSTER_PAD + 12, DIV_Y + 28, titleMaxW, 26, 3);
 
-    // Bottom branding
-    ctx.fillStyle = "rgba(212,175,55,0.6)";
-    ctx.font = "bold 11px 'Courier New', monospace";
+    // ── branding bar (bottom) ─────────────────────────────────────────────────
+    const BRAND_Y = CARD_H - 90;
+
+    // thin gold separator
+    ctx.strokeStyle = "rgba(212,175,55,0.15)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(POSTER_PAD + 12, BRAND_Y);
+    ctx.lineTo(CARD_W - POSTER_PAD - 12, BRAND_Y);
+    ctx.stroke();
+
+    // "ON" text
+    ctx.fillStyle = "rgba(212,175,55,0.4)";
+    ctx.font = "11px 'Courier New', monospace";
     ctx.textAlign = "center";
-    ctx.fillText("MY POV", CARD_W / 2, CARD_H - 30);
-    ctx.fillStyle = "rgba(212,175,55,0.3)";
-    ctx.font = "10px 'Courier New', monospace";
-    ctx.fillText("mypov.app", CARD_W / 2, CARD_H - 16);
-    ctx.textAlign = "left";
+    ctx.fillText("ON", CARD_W / 2, BRAND_Y + 22);
 
+    // MyPOV logo centered
+    const logoImg = await loadImg(MYPOV_LOGO_B64);
+    if (logoImg) {
+      const LOGO_H = 44;
+      const LOGO_W = (logoImg.width / logoImg.height) * LOGO_H;
+      ctx.drawImage(logoImg, CARD_W / 2 - LOGO_W / 2, BRAND_Y + 30, LOGO_W, LOGO_H);
+    } else {
+      ctx.fillStyle = "#d4af37";
+      ctx.font = "bold 18px 'Courier New', monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("MY POV", CARD_W / 2, BRAND_Y + 52);
+    }
+
+    ctx.textAlign = "left";
     setGenerating(false);
   }
 
   async function downloadImage() {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const url = canvas.toDataURL("image/png");
     const a = document.createElement("a");
-    a.href = url;
+    a.href = canvas.toDataURL("image/png");
     a.download = `mypov-${(entry.title || "review").replace(/\s+/g, "-").toLowerCase()}.png`;
     a.click();
-    setShareStatus("Image downloaded!");
+    setStatus("Downloaded!");
   }
 
   async function shareImage() {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
-    if (navigator.canShare) {
-      canvas.toBlob(async (blob) => {
-        const file = new File([blob], `mypov-${entry.title || "review"}.png`, { type: "image/png" });
-        if (navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({
-              title: `${entry.title} — MyPOV`,
-              text: `I rated ${entry.title} ${entry.rating}/10`,
-              files: [file],
-            });
-            setShareStatus("Shared!");
-            return;
-          } catch (e) {
-            if (e?.name !== "AbortError") console.error(e);
-          }
-        }
-        downloadImage();
-      });
-    } else {
+    if (!navigator.canShare) { downloadImage(); return; }
+    canvas.toBlob(async (blob) => {
+      const file = new File([blob], `mypov-${entry.title || "review"}.png`, { type: "image/png" });
+      if (navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ title: `${entry.title} — MyPOV`, files: [file] });
+          setStatus("Shared!");
+          return;
+        } catch (e) { if (e?.name !== "AbortError") console.error(e); }
+      }
       downloadImage();
-    }
+    });
   }
 
   return (
     <>
       <style>{`
-        .share-modal-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0,0,0,0.85);
+        .sic-overlay {
+          position: fixed; inset: 0;
+          background: rgba(0,0,0,0.88);
           z-index: 9999;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+          display: flex; align-items: center; justify-content: center;
           padding: 16px;
         }
-        .share-modal {
-          background: #0e0c10;
-          border: 1px solid rgba(212,175,55,0.25);
-          border-radius: 20px;
+        .sic-modal {
+          background: #0d0b0f;
+          border: 1px solid rgba(212,175,55,0.22);
+          border-radius: 22px;
           padding: 24px;
-          max-width: 520px;
-          width: 100%;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 16px;
-          max-height: 95vh;
-          overflow-y: auto;
+          max-width: 480px; width: 100%;
+          display: flex; flex-direction: column; align-items: center; gap: 18px;
+          max-height: 96vh; overflow-y: auto;
         }
-        .share-modal-title {
+        .sic-title {
           font-family: 'Cinzel', serif;
-          color: #d4af37;
-          font-size: 14px;
-          letter-spacing: 3px;
-          text-transform: uppercase;
+          color: #d4af37; font-size: 13px;
+          letter-spacing: 3px; text-transform: uppercase;
         }
-        .share-canvas-wrap {
-          width: 100%;
-          max-width: 360px;
-          border-radius: 12px;
-          overflow: hidden;
-          box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+        .sic-canvas-wrap {
+          width: 100%; max-width: 340px;
+          border-radius: 14px; overflow: hidden;
+          box-shadow: 0 10px 50px rgba(0,0,0,0.8);
+          border: 1px solid rgba(212,175,55,0.15);
         }
-        .share-canvas-wrap canvas {
-          width: 100%;
-          height: auto;
-          display: block;
-        }
-        .share-btn-row {
-          display: flex;
-          gap: 10px;
-          flex-wrap: wrap;
-          justify-content: center;
-        }
-        .share-dl-btn {
+        .sic-canvas-wrap canvas { width: 100%; height: auto; display: block; }
+        .sic-btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+        .sic-btn-gold {
           background: linear-gradient(135deg, #d4af37, #b8960c);
-          color: #0a0803;
-          border: none;
-          border-radius: 30px;
-          padding: 11px 24px;
-          font-family: 'Cinzel', serif;
-          font-size: 12px;
-          letter-spacing: 2px;
-          text-transform: uppercase;
-          cursor: pointer;
-          transition: transform 0.2s;
+          color: #0a0803; border: none; border-radius: 30px;
+          padding: 11px 24px; font-family: 'Cinzel', serif;
+          font-size: 12px; letter-spacing: 2px; text-transform: uppercase;
+          cursor: pointer; transition: transform 0.2s;
         }
-        .share-dl-btn:hover { transform: translateY(-2px); }
-        .share-cl-btn {
+        .sic-btn-gold:hover { transform: translateY(-2px); }
+        .sic-btn-ghost {
           background: rgba(255,255,255,0.03);
           border: 1px solid rgba(212,175,55,0.3);
-          color: #d4af37;
-          border-radius: 30px;
-          padding: 11px 24px;
-          font-family: 'Cinzel', serif;
-          font-size: 12px;
-          letter-spacing: 2px;
-          text-transform: uppercase;
-          cursor: pointer;
-          transition: transform 0.2s;
+          color: #d4af37; border-radius: 30px;
+          padding: 11px 24px; font-family: 'Cinzel', serif;
+          font-size: 12px; letter-spacing: 2px; text-transform: uppercase;
+          cursor: pointer; transition: transform 0.2s;
         }
-        .share-cl-btn:hover { transform: translateY(-2px); }
-        .share-status-text {
+        .sic-btn-ghost:hover { transform: translateY(-2px); }
+        .sic-status {
           font-family: 'DM Mono', monospace;
-          font-size: 12px;
-          color: rgba(212,175,55,0.75);
+          font-size: 12px; color: rgba(212,175,55,0.75);
+          text-align: center;
         }
-        .share-generating {
+        .sic-hint {
           font-family: 'DM Mono', monospace;
-          font-size: 12px;
-          color: rgba(212,175,55,0.5);
-          letter-spacing: 0.1em;
+          font-size: 11px; color: rgba(212,175,55,0.35);
+          text-align: center; line-height: 1.5;
         }
       `}</style>
 
-      <div className="share-modal-overlay" onClick={onClose}>
-        <div className="share-modal" onClick={(e) => e.stopPropagation()}>
-          <p className="share-modal-title">Share Your POV</p>
+      <div className="sic-overlay" onClick={onClose}>
+        <div className="sic-modal" onClick={(e) => e.stopPropagation()}>
+          <p className="sic-title">Share Your POV</p>
 
           {generating && (
-            <p className="share-generating">Generating card…</p>
+            <p className="sic-status" style={{ opacity: 0.5 }}>Generating card…</p>
           )}
 
-          <div className="share-canvas-wrap">
+          <div className="sic-canvas-wrap">
             <canvas ref={canvasRef} />
           </div>
 
           {!generating && (
             <>
-              <div className="share-btn-row">
-                <button className="share-dl-btn" onClick={downloadImage}>
-                  Download Image
-                </button>
-                <button className="share-dl-btn" onClick={shareImage}>
-                  Share
-                </button>
-                <button className="share-cl-btn" onClick={onClose}>
-                  Close
-                </button>
+              <div className="sic-btns">
+                <button className="sic-btn-gold" onClick={downloadImage}>Download</button>
+                <button className="sic-btn-gold" onClick={shareImage}>Share</button>
+                <button className="sic-btn-ghost" onClick={onClose}>Close</button>
               </div>
-              {shareStatus && (
-                <p className="share-status-text">{shareStatus}</p>
-              )}
-              <p className="share-status-text" style={{ textAlign: "center", opacity: 0.6 }}>
-                Save this image and post it to Instagram, X, or any social platform
-              </p>
+              {status && <p className="sic-status">{status}</p>}
+              <p className="sic-hint">Save and post to Instagram, X, or any platform</p>
             </>
           )}
         </div>
