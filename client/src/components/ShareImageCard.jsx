@@ -18,13 +18,27 @@ function starString(rating) {
   return s;
 }
 
-function loadImg(src) {
+// Load image — tries direct first, then CORS proxy fallback for TMDB
+function loadImg(src, useCorsProxy = false) {
   return new Promise((resolve) => {
+    if (!src) return resolve(null);
     const img = new Image();
+
+    const proxied = useCorsProxy
+      ? `https://wsrv.nl/?url=${encodeURIComponent(src)}&n=-1`
+      : src;
+
     img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
-    img.onerror = () => resolve(null);
-    img.src = src;
+    img.onerror = () => {
+      if (!useCorsProxy) {
+        // retry once through proxy
+        loadImg(src, true).then(resolve);
+      } else {
+        resolve(null);
+      }
+    };
+    img.src = proxied;
   });
 }
 
@@ -73,6 +87,14 @@ export default function ShareImageCard({ entry, onClose }) {
   const [generating, setGenerating] = useState(true);
   const [status, setStatus] = useState("");
 
+  // Pre-load the logo (same origin, no CORS issues)
+  const logoRef = useRef(null);
+  useEffect(() => {
+    const img = new Image();
+    img.src = myPOVLogoSrc;
+    img.onload = () => { logoRef.current = img; };
+  }, []);
+
   useEffect(() => { draw(); }, [entry]);
 
   async function draw() {
@@ -87,24 +109,24 @@ export default function ShareImageCard({ entry, onClose }) {
     ctx.fillStyle = "#0d0b0f";
     ctx.fillRect(0, 0, CARD_W, CARD_H);
 
-    // ── poster (full-width, rounded top) ─────────────────────────────────────
+    // ── poster ────────────────────────────────────────────────────────────────
     const POSTER_H = 780;
     const POSTER_PAD = 18;
+
     const posterSrc = entry.poster
       ? entry.poster
       : entry.poster_path
       ? `https://image.tmdb.org/t/p/w500${entry.poster_path}`
       : null;
 
+    // Try direct load first; auto-retries via proxy on CORS failure
     const posterImg = posterSrc ? await loadImg(posterSrc) : null;
 
-    // clipping region for poster
     ctx.save();
     roundRect(ctx, POSTER_PAD, POSTER_PAD, CARD_W - POSTER_PAD * 2, POSTER_H, 18);
     ctx.clip();
 
     if (posterImg) {
-      // cover-fit: scale so the image fills the area
       const scale = Math.max(
         (CARD_W - POSTER_PAD * 2) / posterImg.width,
         POSTER_H / posterImg.height
@@ -115,38 +137,37 @@ export default function ShareImageCard({ entry, onClose }) {
       const dy = POSTER_PAD + (POSTER_H - dh) / 2;
       ctx.drawImage(posterImg, dx, dy, dw, dh);
     } else {
-      // gradient placeholder
+      // Stylish fallback — deep gradient + title text
       const g = ctx.createLinearGradient(0, 0, CARD_W, POSTER_H);
       g.addColorStop(0, "#1a1530");
       g.addColorStop(1, "#0d0b0f");
       ctx.fillStyle = g;
       ctx.fillRect(POSTER_PAD, POSTER_PAD, CARD_W - POSTER_PAD * 2, POSTER_H);
-      ctx.fillStyle = "rgba(212,175,55,0.25)";
-      ctx.font = "bold 32px serif";
+      ctx.fillStyle = "rgba(212,175,55,0.22)";
+      ctx.font = "bold 36px serif";
       ctx.textAlign = "center";
       ctx.fillText(entry.title || "MyPOV", CARD_W / 2, POSTER_PAD + POSTER_H / 2);
       ctx.textAlign = "left";
     }
 
-    // fade at bottom of poster into dark bg
-    const fade = ctx.createLinearGradient(0, POSTER_PAD + POSTER_H - 220, 0, POSTER_PAD + POSTER_H);
+    // Bottom fade of poster
+    const fade = ctx.createLinearGradient(0, POSTER_PAD + POSTER_H - 240, 0, POSTER_PAD + POSTER_H);
     fade.addColorStop(0, "rgba(13,11,15,0)");
-    fade.addColorStop(1, "rgba(13,11,15,0.92)");
+    fade.addColorStop(1, "rgba(13,11,15,0.95)");
     ctx.fillStyle = fade;
-    ctx.fillRect(POSTER_PAD, POSTER_PAD + POSTER_H - 220, CARD_W - POSTER_PAD * 2, 220);
+    ctx.fillRect(POSTER_PAD, POSTER_PAD + POSTER_H - 240, CARD_W - POSTER_PAD * 2, 240);
 
     ctx.restore();
 
-    // ── info panel (below poster) ─────────────────────────────────────────────
+    // ── info panel ────────────────────────────────────────────────────────────
     const INFO_Y = POSTER_PAD + POSTER_H + 28;
+    const titleMaxW = CARD_W - POSTER_PAD * 2 - 20;
 
     // Title
     ctx.fillStyle = "#f5f0e8";
     ctx.font = "bold 38px Georgia, serif";
     ctx.textAlign = "left";
     const titleText = entry.title || "Untitled";
-    // single-line or wrap at 2
-    const titleMaxW = CARD_W - POSTER_PAD * 2 - 20;
     let titleEndY;
     if (ctx.measureText(titleText).width <= titleMaxW) {
       ctx.fillText(titleText, POSTER_PAD + 12, INFO_Y);
@@ -161,7 +182,7 @@ export default function ShareImageCard({ entry, onClose }) {
     ctx.font = "30px serif";
     ctx.fillText(starString(entry.rating), POSTER_PAD + 12, STARS_Y);
 
-    // Rating number badge
+    // Rating badge
     const ratingLabel = `${entry.rating || 0}/10`;
     const ratingX = POSTER_PAD + 12 + ctx.measureText(starString(entry.rating)).width + 14;
     ctx.font = "bold 14px 'Courier New', monospace";
@@ -183,10 +204,9 @@ export default function ShareImageCard({ entry, onClose }) {
     ctx.font = "italic 16px Georgia, serif";
     wrapText(ctx, `"${reviewRaw}"`, POSTER_PAD + 12, DIV_Y + 28, titleMaxW, 26, 3);
 
-    // ── branding bar (bottom) ─────────────────────────────────────────────────
+    // ── branding bar ─────────────────────────────────────────────────────────
     const BRAND_Y = CARD_H - 90;
 
-    // thin gold separator
     ctx.strokeStyle = "rgba(212,175,55,0.15)";
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -194,23 +214,22 @@ export default function ShareImageCard({ entry, onClose }) {
     ctx.lineTo(CARD_W - POSTER_PAD - 12, BRAND_Y);
     ctx.stroke();
 
-    // "ON" text
     ctx.fillStyle = "rgba(212,175,55,0.4)";
     ctx.font = "11px 'Courier New', monospace";
     ctx.textAlign = "center";
     ctx.fillText("ON", CARD_W / 2, BRAND_Y + 22);
 
-    // MyPOV logo centered
-    const logoImg = await loadImg(MYPOV_LOGO_B64);
-    if (logoImg) {
+    // Logo — use pre-loaded ref; fallback to text if not ready
+    const logoImg = logoRef.current;
+    if (logoImg && logoImg.complete) {
       const LOGO_H = 44;
       const LOGO_W = (logoImg.width / logoImg.height) * LOGO_H;
       ctx.drawImage(logoImg, CARD_W / 2 - LOGO_W / 2, BRAND_Y + 30, LOGO_W, LOGO_H);
     } else {
       ctx.fillStyle = "#d4af37";
-      ctx.font = "bold 18px 'Courier New', monospace";
+      ctx.font = "bold 20px 'Courier New', monospace";
       ctx.textAlign = "center";
-      ctx.fillText("MY POV", CARD_W / 2, BRAND_Y + 52);
+      ctx.fillText("MY POV", CARD_W / 2, BRAND_Y + 58);
     }
 
     ctx.textAlign = "left";
