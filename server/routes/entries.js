@@ -215,6 +215,26 @@ async function enrichCastWithImages(omdbCast, imdbId) {
 
 // Fetch all data (OMDb + TMDB images + cast) with parallel requests and caching
 async function fetchOmdbDetails({ imdbId, title, type, skipImages = false }) {
+  // If imdbId is a TMDB numeric ID (not a real tt... IMDb ID), resolve it first
+  if (imdbId && /^\d+$/.test(imdbId) && TMDB_KEY) {
+    try {
+      const mediaType = type === "tv" ? "tv" : "movie";
+      const extRes = await tmdb.get(`/${mediaType}/${imdbId}/external_ids`, {
+        params: { api_key: TMDB_KEY }
+      });
+      const resolvedId = extRes.data?.imdb_id;
+      if (resolvedId) {
+        imdbId = resolvedId;
+      } else {
+        // No IMDb ID from TMDB — fall back to title search
+        imdbId = null;
+      }
+    } catch (e) {
+      console.warn("Could not resolve TMDB ID to IMDb ID:", e.message);
+      imdbId = null;
+    }
+  }
+
   const cacheKey = imdbId || title;
   if (cacheKey && detailsCache.get(cacheKey) && Date.now() - detailsCache.get(cacheKey).timestamp < CACHE_TTL) {
     return detailsCache.get(cacheKey).data;
