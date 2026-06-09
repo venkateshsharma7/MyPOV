@@ -38,6 +38,7 @@ export default function LogEntry() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [movieDetails, setMovieDetails] = useState(null);
+  const [year, setYear] = useState("");
   const [searching, setSearching] = useState(false);
   const searchTimeout = useState(null);
 
@@ -69,7 +70,8 @@ export default function LogEntry() {
 
   async function selectMovie(movie) {
     setTitle(movie.Title || "");
-    setTmdbId(null);
+    setTmdbId(movie.imdbID || null);
+    setYear(movie.Year || "");
     setType(movie.Type === "series" ? "tv" : "movie");
     setLanguage("");
     const posterUrl = movie.Poster && movie.Poster !== "N/A" ? movie.Poster : "";
@@ -115,6 +117,8 @@ export default function LogEntry() {
               genre: d.Genre && d.Genre !== "N/A" ? d.Genre : null,
             });
             if (d.Poster && d.Poster !== "N/A") setPoster(d.Poster);
+            if (d.Year) setYear(d.Year);
+            if (d.Genre && d.Genre !== "N/A") setGenres(d.Genre.split(", "));
           }
         }
       } catch (err) {
@@ -143,6 +147,7 @@ export default function LogEntry() {
           type,
           genres,
           language,
+          year,
           pov: isPOV,
           isPublic,
           poster,
@@ -163,6 +168,7 @@ export default function LogEntry() {
       setIsPOV(false);
       setIsPublic(false);
       setMovieDetails(null);
+      setYear("");
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       console.error("Save failed:", err);
