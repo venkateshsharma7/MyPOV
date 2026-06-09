@@ -5,18 +5,15 @@ import myPOVLogoSrc from "../assets/MyPOV_Logo.png";
 const W = 720;
 const H = 1280;
 
-// Load image with automatic CORS proxy fallback (no double-proxy)
 function loadImg(src) {
   return new Promise((resolve) => {
     if (!src) return resolve(null);
-
     const attempt = (url, isFallback) => {
       const img = new Image();
       img.crossOrigin = "anonymous";
       img.onload = () => resolve(img);
       img.onerror = () => {
         if (!isFallback) {
-          // One retry through a different proxy
           attempt(`https://images.weserv.nl/?url=${encodeURIComponent(src)}`, true);
         } else {
           resolve(null);
@@ -24,7 +21,6 @@ function loadImg(src) {
       };
       img.src = url;
     };
-
     attempt(src, false);
   });
 }
@@ -39,13 +35,47 @@ function rr(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+// Draw initials avatar on canvas directly (no external request needed)
+function drawInitialsAvatar(ctx, username, cx, cy, radius) {
+  // Background circle — dark gold
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fillStyle = "#1a1720";
+  ctx.fill();
+
+  // Gold ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.strokeStyle = "#d4af37";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.restore();
+
+  // Initials text
+  const initials = (username || "?")
+    .split(/[\s_\-\.]+/)
+    .map(w => w[0]?.toUpperCase() || "")
+    .slice(0, 2)
+    .join("") || username[0]?.toUpperCase() || "?";
+
+  ctx.save();
+  ctx.fillStyle = "#d4af37";
+  ctx.font = `bold ${radius * 0.85}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(initials, cx, cy + 2);
+  ctx.textBaseline = "alphabetic";
+  ctx.restore();
+}
+
 export default function ShareImageCard({ entry, onClose }) {
   const canvasRef = useRef(null);
   const logoRef = useRef(null);
   const [ready, setReady] = useState(false);
   const [status, setStatus] = useState("");
 
-  // Preload logo
+  // Preload logo (same-origin PNG — no CORS)
   useEffect(() => {
     const img = new Image();
     img.onload = () => { logoRef.current = img; };
@@ -63,47 +93,85 @@ export default function ShareImageCard({ entry, onClose }) {
     canvas.height = H;
 
     // ── 1. BACKGROUND ─────────────────────────────────────────────────────────
-    // Dark blue-grey gradient background to match the theme
     const bg = ctx.createLinearGradient(0, 0, 0, H);
     bg.addColorStop(0, "#2c2d3a");
     bg.addColorStop(1, "#15161d");
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
-    // ── 2. POSTER CARD ────────────────────────────────────────────────────────
-    const PW = 480;   // poster width
-    const PH = 720;   // poster height  (standard 2:3 movie poster ratio)
-    const PX = (W - PW) / 2;
-    const PY = 140;   // Shifted down slightly to fit the avatar at the top
-    const PR = 16;    // Slightly sharper corners to match Letterboxd
+    // ── 2. AVATAR BUBBLE — sits on top edge of poster ─────────────────────────
+    const AR = 46;     // avatar radius
+    const AX = W / 2;
+    const AY = 140;    // avatar centre Y — poster starts at AY
 
-    // Shadow for poster
+    // Resolve username from entry
+    const username = entry.user?.username || entry.username || null;
+
+    // Try to load a real avatar if available in entry; otherwise use initials
+    const avatarSrc = entry.user?.avatar || entry.userAvatar || null;
+    const avatarImg = avatarSrc ? await loadImg(avatarSrc) : null;
+
+    if (avatarImg) {
+      // Drop shadow
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(AX, AY, AR, 0, Math.PI * 2);
+      ctx.shadowColor = "rgba(0,0,0,0.7)";
+      ctx.shadowBlur = 14;
+      ctx.shadowOffsetY = 5;
+      ctx.fillStyle = "#000";
+      ctx.fill();
+      ctx.restore();
+
+      // Clip + draw real avatar
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(AX, AY, AR, 0, Math.PI * 2);
+      ctx.clip();
+      const scale = Math.max((AR * 2) / avatarImg.width, (AR * 2) / avatarImg.height);
+      const dw = avatarImg.width * scale;
+      const dh = avatarImg.height * scale;
+      ctx.drawImage(avatarImg, AX - dw / 2, AY - dh / 2, dw, dh);
+      ctx.restore();
+
+      // Ring
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(AX, AY, AR, 0, Math.PI * 2);
+      ctx.strokeStyle = "#d4af37";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.restore();
+    } else {
+      // No real avatar → draw initials circle
+      drawInitialsAvatar(ctx, username || "?", AX, AY, AR);
+    }
+
+    // ── 3. POSTER CARD — top edge aligned with avatar centre ─────────────────
+    const PW = 480;
+    const PH = 720;
+    const PX = (W - PW) / 2;
+    const PY = AY;     // poster top = avatar centre so avatar "sits" on top
+    const PR = 16;
+
+    // Shadow
     ctx.save();
     ctx.shadowColor = "rgba(0,0,0,0.6)";
     ctx.shadowBlur = 40;
-    ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 15;
     rr(ctx, PX, PY, PW, PH, PR);
     ctx.fillStyle = "#000";
     ctx.fill();
     ctx.restore();
 
-    // Load Poster & Avatar
+    // Poster image
     const posterSrc = entry.poster
       ? entry.poster
       : entry.poster_path
       ? `https://image.tmdb.org/t/p/w780${entry.poster_path}`
       : null;
-    
-    // Provide a default avatar if none exists in the entry object
-    const avatarSrc = entry.userAvatar || `https://ui-avatars.com/api/?name=User&background=1a1b24&color=fff`;
+    const posterImg = posterSrc ? await loadImg(posterSrc) : null;
 
-    const [posterImg, avatarImg] = await Promise.all([
-      posterSrc ? loadImg(posterSrc) : Promise.resolve(null),
-      loadImg(avatarSrc)
-    ]);
-
-    // Draw Poster Image
     ctx.save();
     rr(ctx, PX, PY, PW, PH, PR);
     ctx.clip();
@@ -113,14 +181,13 @@ export default function ShareImageCard({ entry, onClose }) {
       const dh = posterImg.height * scale;
       ctx.drawImage(posterImg, PX + (PW - dw) / 2, PY + (PH - dh) / 2, dw, dh);
     } else {
-      // Fallback gradient with title
       const g = ctx.createLinearGradient(PX, PY, PX + PW, PY + PH);
       g.addColorStop(0, "#2a2040");
       g.addColorStop(1, "#0d0b14");
       ctx.fillStyle = g;
       ctx.fillRect(PX, PY, PW, PH);
       ctx.fillStyle = "rgba(212,175,55,0.5)";
-      ctx.font = "bold 36px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+      ctx.font = "bold 36px serif";
       ctx.textAlign = "center";
       ctx.fillText(entry.title || "", W / 2, PY + PH / 2);
     }
@@ -134,46 +201,8 @@ export default function ShareImageCard({ entry, onClose }) {
     ctx.stroke();
     ctx.restore();
 
-    // ── 3. AVATAR — circular, centered exactly on the top edge ────────────────
-    if (avatarImg) {
-      const AR = 46; // Avatar radius
-      const AX = W / 2;
-      const AY = PY; // Positioned exactly on the top edge of the poster
-
-      // Avatar drop shadow
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(AX, AY, AR, 0, Math.PI * 2);
-      ctx.shadowColor = "rgba(0,0,0,0.7)";
-      ctx.shadowBlur = 12;
-      ctx.shadowOffsetY = 4;
-      ctx.fillStyle = "#000";
-      ctx.fill();
-      ctx.restore();
-
-      // Draw avatar image clipped to circle
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(AX, AY, AR, 0, Math.PI * 2);
-      ctx.clip();
-      const scale = Math.max((AR * 2) / avatarImg.width, (AR * 2) / avatarImg.height);
-      const dw = avatarImg.width * scale;
-      const dh = avatarImg.height * scale;
-      ctx.drawImage(avatarImg, AX - dw / 2, AY - dh / 2, dw, dh);
-      ctx.restore();
-
-      // Subtle inner/outer border around avatar
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(AX, AY, AR, 0, Math.PI * 2);
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = "rgba(255,255,255,0.1)";
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    // ── 4. TITLE — white, bold, modern sans-serif ─────────────────────────────
-    const TITLE_Y = PY + PH + 75;
+    // ── 4. TITLE ──────────────────────────────────────────────────────────────
+    const TITLE_Y = PY + PH + 72;
     ctx.textAlign = "center";
     ctx.fillStyle = "#ffffff";
     ctx.font = "bold 52px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
@@ -185,27 +214,33 @@ export default function ShareImageCard({ entry, onClose }) {
     if (title !== (entry.title || "Untitled")) title = title.trimEnd() + "…";
     ctx.fillText(title, W / 2, TITLE_Y);
 
-    // ── 5. STARS — gold, cleanly spaced ───────────────────────────────────────
+    // ── 5. STARS ──────────────────────────────────────────────────────────────
     const r = Number(entry.rating) || 0;
     const fullStars = Math.floor(r / 2);
     const halfStar = r % 2 >= 1;
     const emptyStars = Math.max(0, 5 - fullStars - (halfStar ? 1 : 0));
     const starStr = "★".repeat(fullStars) + (halfStar ? "½" : "") + "☆".repeat(emptyStars);
 
-    const STAR_Y = TITLE_Y + 65;
-    ctx.fillStyle = "#d4af37"; // MyPOV Gold
-    ctx.font = "48px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    const STAR_Y = TITLE_Y + 62;
+    ctx.fillStyle = "#d4af37";
+    ctx.font = "50px serif";
     ctx.textAlign = "center";
-    // Adding slight tracking (letter-spacing) natively by adding thin spaces can be tricky in canvas,
-    // so we render the star string cleanly centered.
     ctx.fillText(starStr, W / 2, STAR_Y);
 
-    // ── 6. BRANDING — "ON" divider + logo, bottom centre ──────────────────────
-    const BRAND_Y = H - 140;
+    // ── 6. USERNAME — below stars, muted, like Letterboxd ─────────────────────
+    if (username) {
+      const USER_Y = STAR_Y + 48;
+      ctx.fillStyle = "rgba(255,255,255,0.45)";
+      ctx.font = "500 26px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(`@${username}`, W / 2, USER_Y);
+    }
+
+    // ── 7. BRANDING — "ON" + logo ─────────────────────────────────────────────
+    const BRAND_Y = H - 130;
 
     ctx.strokeStyle = "rgba(255,255,255,0.15)";
     ctx.lineWidth = 1;
-
     ctx.beginPath(); ctx.moveTo(90, BRAND_Y); ctx.lineTo(W / 2 - 34, BRAND_Y); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(W / 2 + 34, BRAND_Y); ctx.lineTo(W - 90, BRAND_Y); ctx.stroke();
 
@@ -214,17 +249,16 @@ export default function ShareImageCard({ entry, onClose }) {
     ctx.textAlign = "center";
     ctx.fillText("ON", W / 2, BRAND_Y + 7);
 
-    // MyPOV logo
     const logo = logoRef.current;
     if (logo && logo.naturalWidth > 0) {
       const LH = 60;
       const LW = (logo.naturalWidth / logo.naturalHeight) * LH;
-      ctx.drawImage(logo, W / 2 - LW / 2, BRAND_Y + 30, LW, LH);
+      ctx.drawImage(logo, W / 2 - LW / 2, BRAND_Y + 22, LW, LH);
     } else {
       ctx.fillStyle = "#d4af37";
-      ctx.font = "bold 28px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      ctx.font = "bold 28px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("MY POV", W / 2, BRAND_Y + 70);
+      ctx.fillText("MY POV", W / 2, BRAND_Y + 62);
     }
 
     setReady(true);
@@ -244,8 +278,11 @@ export default function ShareImageCard({ entry, onClose }) {
     canvas.toBlob(async (blob) => {
       const file = new File([blob], `mypov-${entry.title || "review"}.png`, { type: "image/png" });
       if (navigator.canShare({ files: [file] })) {
-        try { await navigator.share({ title: `${entry.title} — MyPOV`, files: [file] }); setStatus("Shared!"); return; }
-        catch (e) { if (e?.name !== "AbortError") console.error(e); }
+        try {
+          await navigator.share({ title: `${entry.title} — MyPOV`, files: [file] });
+          setStatus("Shared!");
+          return;
+        } catch (e) { if (e?.name !== "AbortError") console.error(e); }
       }
       download();
     });
@@ -268,7 +305,7 @@ export default function ShareImageCard({ entry, onClose }) {
           max-height: 96vh; overflow-y: auto;
         }
         .sic-label {
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
           color: #d4af37; font-weight: 700;
           font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
         }
@@ -279,7 +316,7 @@ export default function ShareImageCard({ entry, onClose }) {
         }
         .sic-wrap canvas { width: 100%; height: auto; display: block; }
         .sic-generating {
-          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px;
+          font-family: monospace; font-size: 11px;
           color: rgba(212,175,55,0.4); letter-spacing: 0.1em;
         }
         .sic-btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
@@ -303,11 +340,11 @@ export default function ShareImageCard({ entry, onClose }) {
         }
         .sic-ghost:hover { transform: translateY(-2px); border-color: rgba(212,175,55,0.7); }
         .sic-status {
-          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px;
+          font-family: monospace; font-size: 11px;
           color: rgba(212,175,55,0.7); text-align: center;
         }
         .sic-hint {
-          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px;
+          font-family: monospace; font-size: 10px;
           color: rgba(255,255,255,0.18); text-align: center; line-height: 1.7;
         }
       `}</style>
@@ -315,13 +352,10 @@ export default function ShareImageCard({ entry, onClose }) {
       <div className="sic-overlay" onClick={onClose}>
         <div className="sic-modal" onClick={e => e.stopPropagation()}>
           <p className="sic-label">Share Your POV</p>
-
           {!ready && <p className="sic-generating">Generating card…</p>}
-
           <div className="sic-wrap">
             <canvas ref={canvasRef} />
           </div>
-
           {ready && (
             <>
               <div className="sic-btns">
