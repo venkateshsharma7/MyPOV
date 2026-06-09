@@ -326,11 +326,29 @@ router.post("/", auth, actionLimiter, [
   try {
     const { title, rating, review, date, type, genres, language, pov, isPublic, poster, backdrop, tmdbId } = req.body;
 
-    // If the frontend already sent poster + tmdbId (user picked from search),
-    // use them directly — don't re-fetch by title which picks the wrong movie.
+    // If the frontend sent a tmdbId, resolve it to a real IMDb tt... ID first.
+    // Numeric TMDB IDs break the movie page lookup which expects tt... format.
+    let resolvedImdbId = null;
+    if (tmdbId && /^\d+$/.test(String(tmdbId)) && TMDB_KEY) {
+      try {
+        const mediaType = type === "tv" ? "tv" : "movie";
+        const extRes = await tmdb.get(`/${mediaType}/${tmdbId}/external_ids`, {
+          params: { api_key: TMDB_KEY }
+        });
+        resolvedImdbId = extRes.data?.imdb_id || null;
+      } catch (e) {
+        console.warn("Could not resolve TMDB ID:", e.message);
+      }
+    } else if (tmdbId) {
+      resolvedImdbId = tmdbId; // already a tt... ID
+    }
+
+    // Use resolved IMDb ID to fetch full details (poster, backdrop, genres etc)
     let omdbData = null;
-    if (!poster && !tmdbId) {
-      // Only fall back to OMDB lookup when no selection was made
+    if (resolvedImdbId) {
+      omdbData = await fetchOmdbDetails({ imdbId: resolvedImdbId, title, type, skipImages: !!poster });
+    } else if (!poster) {
+      // No selection or resolution failed — fall back to title search
       omdbData = await fetchOmdbDetails({ title, type });
     }
 
@@ -338,8 +356,8 @@ router.post("/", auth, actionLimiter, [
     const fallbackGenres = normalizeGenres(omdbData?.genres);
     const entry = await Entry.create({
       user: req.user.id,
-      tmdbId: tmdbId || omdbData?.imdbId || null,
-      title: title.trim(),
+      tmdbId: resolvedImdbId || omdbData?.imdbId || null,
+      title: omdbData?.title?.trim() || title.trim(),
       poster: poster || omdbData?.poster || null,
       backdrop: backdrop || omdbData?.backdrop || null,
       rating: Number(rating),
@@ -448,7 +466,8 @@ router.get("/movie/:key", async (req, res) => {
     let query = { isPublic: true };
     const isObjectId = /^[0-9a-fA-F]{24}$/.test(key);
     const isImdbId = /^tt\d+$/i.test(key);
-    
+    const isNumericTmdbId = /^\d+$/.test(key);
+
     if (isObjectId) {
       const singleEntry = await Entry.findById(key).lean();
       if (!singleEntry || !singleEntry.isPublic) return res.status(404).json({ error: "Movie not found" });
@@ -456,6 +475,26 @@ router.get("/movie/:key", async (req, res) => {
       else query.title = singleEntry.title;
     } else if (isImdbId) {
       query.tmdbId = key;
+    } else if (isNumericTmdbId && TMDB_KEY) {
+      // Numeric TMDB ID — resolve to IMDb ID first, then look up
+      try {
+        const typeGuess = req.query.type === "tv" ? "tv" : "movie";
+        const extRes = await tmdb.get(`/${typeGuess}/${key}/external_ids`, { params: { api_key: TMDB_KEY } });
+        const realId = extRes.data?.imdb_id;
+        if (realId) {
+          query.tmdbId = realId;
+        } else {
+          // Try TV if movie failed
+          const extRes2 = await tmdb.get(`/tv/${key}/external_ids`, { params: { api_key: TMDB_KEY } });
+          const realId2 = extRes2.data?.imdb_id;
+          if (realId2) query.tmdbId = realId2;
+          else if (titleParam) query.title = { $regex: `^${escapeRegex(titleParam)}$`, $options: "i" };
+          else return res.status(404).json({ error: "Movie not found" });
+        }
+      } catch(e) {
+        if (titleParam) query.title = { $regex: `^${escapeRegex(titleParam)}$`, $options: "i" };
+        else return res.status(404).json({ error: "Movie not found" });
+      }
     } else if (titleParam) {
       query.title = { $regex: `^${escapeRegex(titleParam)}$`, $options: "i" };
     } else {
