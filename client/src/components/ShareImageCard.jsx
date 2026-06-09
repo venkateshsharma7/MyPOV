@@ -35,16 +35,13 @@ function rr(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-// Draw initials avatar on canvas directly (no external request needed)
 function drawInitialsAvatar(ctx, username, cx, cy, radius) {
-  // Background circle — dark gold
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy, radius, 0, Math.PI * 2);
   ctx.fillStyle = "#1a1720";
   ctx.fill();
 
-  // Gold ring
   ctx.beginPath();
   ctx.arc(cx, cy, radius, 0, Math.PI * 2);
   ctx.strokeStyle = "rgba(212,175,55, 0.8)";
@@ -52,7 +49,6 @@ function drawInitialsAvatar(ctx, username, cx, cy, radius) {
   ctx.stroke();
   ctx.restore();
 
-  // Initials text
   const initials = (username || "?")
     .split(/[\s_\-\.]+/)
     .map(w => w[0]?.toUpperCase() || "")
@@ -64,7 +60,6 @@ function drawInitialsAvatar(ctx, username, cx, cy, radius) {
   ctx.font = `bold ${radius * 0.85}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  // Add a slight optical vertical adjustment for standard fonts
   ctx.fillText(initials, cx, cy + 2); 
   ctx.restore();
 }
@@ -75,7 +70,6 @@ export default function ShareImageCard({ entry, onClose }) {
   const [ready, setReady] = useState(false);
   const [status, setStatus] = useState("");
 
-  // Preload logo (same-origin PNG — no CORS)
   useEffect(() => {
     const img = new Image();
     img.onload = () => { logoRef.current = img; };
@@ -100,16 +94,15 @@ export default function ShareImageCard({ entry, onClose }) {
     ctx.fillRect(0, 0, W, H);
 
     // Coordinate Setup
-    const AR = 46;     // avatar radius
+    const AR = 46;
     const AX = W / 2;
-    const AY = 140;    // avatar centre Y
+    const AY = 140;
     
     const PW = 480;
     const PH = 720;
     const PX = (W - PW) / 2;
-    const PY = AY;     // poster top aligns perfectly with avatar center
+    const PY = AY;
 
-    // Resolve User & Poster Data
     const username = entry.user?.username || entry.username || null;
     const avatarSrc = entry.user?.avatar || entry.userAvatar || null;
     const posterSrc = entry.poster
@@ -118,14 +111,12 @@ export default function ShareImageCard({ entry, onClose }) {
       ? `https://image.tmdb.org/t/p/w780${entry.poster_path}`
       : null;
 
-    // Load Images concurrently
     const [avatarImg, posterImg] = await Promise.all([
       avatarSrc ? loadImg(avatarSrc) : Promise.resolve(null),
       posterSrc ? loadImg(posterSrc) : Promise.resolve(null)
     ]);
 
-    // ── 2. POSTER CARD (MUST DRAW BEFORE AVATAR FOR Z-INDEX) ──────────────────
-    // Shadow
+    // ── 2. POSTER CARD ────────────────────────────────────────────────────────
     ctx.save();
     ctx.shadowColor = "rgba(0,0,0,0.6)";
     ctx.shadowBlur = 40;
@@ -135,7 +126,6 @@ export default function ShareImageCard({ entry, onClose }) {
     ctx.fill();
     ctx.restore();
 
-    // Poster Image
     ctx.save();
     rr(ctx, PX, PY, PW, PH, 16);
     ctx.clip();
@@ -157,7 +147,6 @@ export default function ShareImageCard({ entry, onClose }) {
     }
     ctx.restore();
 
-    // Poster border
     ctx.save();
     rr(ctx, PX, PY, PW, PH, 16);
     ctx.strokeStyle = "rgba(255,255,255,0.06)";
@@ -165,9 +154,8 @@ export default function ShareImageCard({ entry, onClose }) {
     ctx.stroke();
     ctx.restore();
 
-    // ── 3. AVATAR BUBBLE (DRAWS OVER POSTER TOP EDGE) ─────────────────────────
+    // ── 3. AVATAR BUBBLE ──────────────────────────────────────────────────────
     if (avatarImg) {
-      // Drop shadow
       ctx.save();
       ctx.beginPath();
       ctx.arc(AX, AY, AR, 0, Math.PI * 2);
@@ -178,7 +166,6 @@ export default function ShareImageCard({ entry, onClose }) {
       ctx.fill();
       ctx.restore();
 
-      // Clip + draw real avatar
       ctx.save();
       ctx.beginPath();
       ctx.arc(AX, AY, AR, 0, Math.PI * 2);
@@ -189,7 +176,6 @@ export default function ShareImageCard({ entry, onClose }) {
       ctx.drawImage(avatarImg, AX - dw / 2, AY - dh / 2, dw, dh);
       ctx.restore();
 
-      // Inner/Outer Ring for definition
       ctx.save();
       ctx.beginPath();
       ctx.arc(AX, AY, AR, 0, Math.PI * 2);
@@ -198,7 +184,6 @@ export default function ShareImageCard({ entry, onClose }) {
       ctx.stroke();
       ctx.restore();
     } else {
-      // Fallback Initials Circle
       drawInitialsAvatar(ctx, username || "?", AX, AY, AR);
     }
 
@@ -224,7 +209,6 @@ export default function ShareImageCard({ entry, onClose }) {
 
     const STAR_Y = TITLE_Y + 62;
     ctx.fillStyle = "#d4af37";
-    // Sans-serif ensures crisp, uniform star icons across all operating systems
     ctx.font = "48px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
     ctx.textAlign = "center";
     ctx.fillText(starStr, W / 2, STAR_Y);
@@ -236,13 +220,12 @@ export default function ShareImageCard({ entry, onClose }) {
       ctx.font = "600 20px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
       ctx.textAlign = "center";
       
-      // Add slight letter spacing simulation natively in canvas
       const userText = `REVIEW BY @${username}`.toUpperCase().split('').join(String.fromCharCode(8202));
       ctx.fillText(userText, W / 2, USER_Y);
     }
 
-    // ── 7. BRANDING — "ON" + logo ─────────────────────────────────────────────
-    const BRAND_Y = H - 130;
+    // ── 7. BRANDING — "ON" + BIGGER LOGO ──────────────────────────────────────
+    const BRAND_Y = H - 150; // Shifted up slightly to accommodate the bigger logo
 
     ctx.strokeStyle = "rgba(255,255,255,0.15)";
     ctx.lineWidth = 1;
@@ -256,14 +239,14 @@ export default function ShareImageCard({ entry, onClose }) {
 
     const logo = logoRef.current;
     if (logo && logo.naturalWidth > 0) {
-      const LH = 60;
+      const LH = 86; // Increased from 60 to 86
       const LW = (logo.naturalWidth / logo.naturalHeight) * LH;
-      ctx.drawImage(logo, W / 2 - LW / 2, BRAND_Y + 28, LW, LH);
+      ctx.drawImage(logo, W / 2 - LW / 2, BRAND_Y + 30, LW, LH);
     } else {
       ctx.fillStyle = "#d4af37";
-      ctx.font = "bold 28px sans-serif";
+      ctx.font = "bold 34px sans-serif"; // Also made fallback text bigger
       ctx.textAlign = "center";
-      ctx.fillText("MY POV", W / 2, BRAND_Y + 68);
+      ctx.fillText("MY POV", W / 2, BRAND_Y + 70);
     }
 
     setReady(true);
