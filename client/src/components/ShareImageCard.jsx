@@ -1,48 +1,33 @@
 // src/components/ShareImageCard.jsx
-// Letterboxd-style visual share card — poster-dominant layout with MyPOV logo
+// Letterboxd-exact layout — poster card floats, title+stars below, MyPOV branding
 import { useRef, useEffect, useState } from "react";
 import myPOVLogoSrc from "../assets/MyPOV_Logo.png";
 
-const CARD_W = 630;
-const CARD_H = 1120;
+// Card dimensions — portrait 9:16 for Instagram stories
+const CARD_W = 720;
+const CARD_H = 1280;
 
-// ---- helpers ----------------------------------------------------------------
+// ── helpers ──────────────────────────────────────────────────────────────────
 
 function starString(rating) {
   const r = Number(rating) || 0;
   const full = Math.floor(r / 2);
   const half = r % 2 >= 1;
-  let s = "★".repeat(full);
-  if (half) s += "½";
-  s += "☆".repeat(Math.max(0, 5 - full - (half ? 1 : 0)));
-  return s;
+  return "★".repeat(full) + (half ? "½" : "") + "☆".repeat(Math.max(0, 5 - full - (half ? 1 : 0)));
 }
 
-// Load image — tries direct first, then CORS proxy fallback for TMDB
-function loadImg(src, useCorsProxy = false) {
+function loadImg(src, proxy = false) {
   return new Promise((resolve) => {
     if (!src) return resolve(null);
     const img = new Image();
-
-    const proxied = useCorsProxy
-      ? `https://wsrv.nl/?url=${encodeURIComponent(src)}&n=-1`
-      : src;
-
     img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
-    img.onerror = () => {
-      if (!useCorsProxy) {
-        // retry once through proxy
-        loadImg(src, true).then(resolve);
-      } else {
-        resolve(null);
-      }
-    };
-    img.src = proxied;
+    img.onerror = () => proxy ? resolve(null) : loadImg(`https://wsrv.nl/?url=${encodeURIComponent(src)}&n=-1`, true).then(resolve);
+    img.src = proxy ? `https://wsrv.nl/?url=${encodeURIComponent(src)}&n=-1` : src;
   });
 }
 
-function roundRect(ctx, x, y, w, h, r) {
+function roundedRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
   ctx.lineTo(x + w - r, y);
@@ -56,39 +41,15 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-function wrapText(ctx, text, x, y, maxW, lh, maxLines = 4) {
-  const words = text.split(" ");
-  let line = "";
-  let cy = y;
-  let lineCount = 0;
-  for (let n = 0; n < words.length; n++) {
-    const test = line + words[n] + " ";
-    if (ctx.measureText(test).width > maxW && n > 0) {
-      if (lineCount >= maxLines - 1) {
-        ctx.fillText(line.trimEnd() + "…", x, cy);
-        return cy + lh;
-      }
-      ctx.fillText(line, x, cy);
-      line = words[n] + " ";
-      cy += lh;
-      lineCount++;
-    } else {
-      line = test;
-    }
-  }
-  ctx.fillText(line.trim(), x, cy);
-  return cy + lh;
-}
-
-// ---- component --------------------------------------------------------------
+// ── component ─────────────────────────────────────────────────────────────────
 
 export default function ShareImageCard({ entry, onClose }) {
   const canvasRef = useRef(null);
+  const logoRef = useRef(null);
   const [generating, setGenerating] = useState(true);
   const [status, setStatus] = useState("");
 
-  // Pre-load the logo (same origin, no CORS issues)
-  const logoRef = useRef(null);
+  // Pre-load logo (same origin — no CORS)
   useEffect(() => {
     const img = new Image();
     img.src = myPOVLogoSrc;
@@ -105,131 +66,135 @@ export default function ShareImageCard({ entry, onClose }) {
     canvas.width = CARD_W;
     canvas.height = CARD_H;
 
-    // ── dark background ──────────────────────────────────────────────────────
-    ctx.fillStyle = "#0d0b0f";
+    // ── BACKGROUND — dark charcoal like Letterboxd's dark story bg ────────────
+    const bgGrad = ctx.createLinearGradient(0, 0, CARD_W, CARD_H);
+    bgGrad.addColorStop(0, "#1a1720");
+    bgGrad.addColorStop(1, "#0d0b0f");
+    ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, CARD_W, CARD_H);
 
-    // ── poster ────────────────────────────────────────────────────────────────
-    const POSTER_H = 780;
-    const POSTER_PAD = 18;
+    // Subtle radial vignette
+    const vignette = ctx.createRadialGradient(CARD_W / 2, CARD_H / 2, 200, CARD_W / 2, CARD_H / 2, 900);
+    vignette.addColorStop(0, "rgba(0,0,0,0)");
+    vignette.addColorStop(1, "rgba(0,0,0,0.45)");
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, CARD_W, CARD_H);
 
+    // ── POSTER CARD — floats with shadow, like Letterboxd ────────────────────
+    const POSTER_W = 560;
+    const POSTER_H = 760;
+    const POSTER_X = (CARD_W - POSTER_W) / 2;
+    const POSTER_Y = 80;
+    const POSTER_R = 22;
+
+    // Drop shadow
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.7)";
+    ctx.shadowBlur = 60;
+    ctx.shadowOffsetY = 20;
+    roundedRect(ctx, POSTER_X, POSTER_Y, POSTER_W, POSTER_H, POSTER_R);
+    ctx.fillStyle = "#111";
+    ctx.fill();
+    ctx.restore();
+
+    // Poster image clipped to rounded rect
     const posterSrc = entry.poster
       ? entry.poster
       : entry.poster_path
-      ? `https://image.tmdb.org/t/p/w500${entry.poster_path}`
+      ? `https://image.tmdb.org/t/p/w780${entry.poster_path}`
       : null;
-
-    // Try direct load first; auto-retries via proxy on CORS failure
     const posterImg = posterSrc ? await loadImg(posterSrc) : null;
 
     ctx.save();
-    roundRect(ctx, POSTER_PAD, POSTER_PAD, CARD_W - POSTER_PAD * 2, POSTER_H, 18);
+    roundedRect(ctx, POSTER_X, POSTER_Y, POSTER_W, POSTER_H, POSTER_R);
     ctx.clip();
 
     if (posterImg) {
-      const scale = Math.max(
-        (CARD_W - POSTER_PAD * 2) / posterImg.width,
-        POSTER_H / posterImg.height
-      );
+      const scale = Math.max(POSTER_W / posterImg.width, POSTER_H / posterImg.height);
       const dw = posterImg.width * scale;
       const dh = posterImg.height * scale;
-      const dx = POSTER_PAD + ((CARD_W - POSTER_PAD * 2) - dw) / 2;
-      const dy = POSTER_PAD + (POSTER_H - dh) / 2;
+      const dx = POSTER_X + (POSTER_W - dw) / 2;
+      const dy = POSTER_Y + (POSTER_H - dh) / 2;
       ctx.drawImage(posterImg, dx, dy, dw, dh);
     } else {
-      // Stylish fallback — deep gradient + title text
-      const g = ctx.createLinearGradient(0, 0, CARD_W, POSTER_H);
-      g.addColorStop(0, "#1a1530");
-      g.addColorStop(1, "#0d0b0f");
-      ctx.fillStyle = g;
-      ctx.fillRect(POSTER_PAD, POSTER_PAD, CARD_W - POSTER_PAD * 2, POSTER_H);
-      ctx.fillStyle = "rgba(212,175,55,0.22)";
-      ctx.font = "bold 36px serif";
+      // Gradient placeholder
+      const pg = ctx.createLinearGradient(POSTER_X, POSTER_Y, POSTER_X + POSTER_W, POSTER_Y + POSTER_H);
+      pg.addColorStop(0, "#2a2040");
+      pg.addColorStop(1, "#0d0b0f");
+      ctx.fillStyle = pg;
+      ctx.fillRect(POSTER_X, POSTER_Y, POSTER_W, POSTER_H);
+      ctx.fillStyle = "rgba(212,175,55,0.3)";
+      ctx.font = "bold 40px Georgia, serif";
       ctx.textAlign = "center";
-      ctx.fillText(entry.title || "MyPOV", CARD_W / 2, POSTER_PAD + POSTER_H / 2);
-      ctx.textAlign = "left";
+      ctx.fillText(entry.title || "MyPOV", CARD_W / 2, POSTER_Y + POSTER_H / 2);
     }
-
-    // Bottom fade of poster
-    const fade = ctx.createLinearGradient(0, POSTER_PAD + POSTER_H - 240, 0, POSTER_PAD + POSTER_H);
-    fade.addColorStop(0, "rgba(13,11,15,0)");
-    fade.addColorStop(1, "rgba(13,11,15,0.95)");
-    ctx.fillStyle = fade;
-    ctx.fillRect(POSTER_PAD, POSTER_PAD + POSTER_H - 240, CARD_W - POSTER_PAD * 2, 240);
-
     ctx.restore();
 
-    // ── info panel ────────────────────────────────────────────────────────────
-    const INFO_Y = POSTER_PAD + POSTER_H + 28;
-    const titleMaxW = CARD_W - POSTER_PAD * 2 - 20;
+    // Poster border — subtle gold tint
+    ctx.save();
+    roundedRect(ctx, POSTER_X, POSTER_Y, POSTER_W, POSTER_H, POSTER_R);
+    ctx.strokeStyle = "rgba(212,175,55,0.18)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
 
-    // Title
-    ctx.fillStyle = "#f5f0e8";
-    ctx.font = "bold 38px Georgia, serif";
-    ctx.textAlign = "left";
+    // ── TITLE — below poster, centered, white bold ────────────────────────────
+    const TITLE_Y = POSTER_Y + POSTER_H + 52;
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 52px Georgia, serif";
+    ctx.textAlign = "center";
     const titleText = entry.title || "Untitled";
-    let titleEndY;
-    if (ctx.measureText(titleText).width <= titleMaxW) {
-      ctx.fillText(titleText, POSTER_PAD + 12, INFO_Y);
-      titleEndY = INFO_Y + 44;
-    } else {
-      titleEndY = wrapText(ctx, titleText, POSTER_PAD + 12, INFO_Y, titleMaxW, 46, 2);
+    // Truncate if too long
+    let displayTitle = titleText;
+    while (ctx.measureText(displayTitle).width > CARD_W - 80 && displayTitle.length > 4) {
+      displayTitle = displayTitle.slice(0, -1);
     }
+    if (displayTitle !== titleText) displayTitle = displayTitle.trimEnd() + "…";
+    ctx.fillText(displayTitle, CARD_W / 2, TITLE_Y);
 
-    // Stars
-    const STARS_Y = titleEndY + 14;
+    // ── STARS — centered, gold, exactly like Letterboxd ──────────────────────
+    const STARS_Y = TITLE_Y + 62;
+    const stars = starString(entry.rating);
     ctx.fillStyle = "#d4af37";
-    ctx.font = "30px serif";
-    ctx.fillText(starString(entry.rating), POSTER_PAD + 12, STARS_Y);
+    ctx.font = "52px serif";
+    ctx.textAlign = "center";
+    ctx.fillText(stars, CARD_W / 2, STARS_Y);
 
-    // Rating badge
-    const ratingLabel = `${entry.rating || 0}/10`;
-    const ratingX = POSTER_PAD + 12 + ctx.measureText(starString(entry.rating)).width + 14;
-    ctx.font = "bold 14px 'Courier New', monospace";
-    ctx.fillStyle = "rgba(212,175,55,0.75)";
-    ctx.fillText(ratingLabel, ratingX, STARS_Y - 2);
+    // ── DIVIDER — "ON" label + logo, bottom centered ─────────────────────────
+    const DIV_Y = CARD_H - 160;
 
-    // Divider
-    const DIV_Y = STARS_Y + 22;
+    // Thin lines either side of "ON"
+    const ON_LABEL = "ON";
+    ctx.font = "bold 20px 'Courier New', monospace";
+    ctx.fillStyle = "rgba(212,175,55,0.5)";
+    ctx.textAlign = "center";
+    const onW = ctx.measureText(ON_LABEL).width;
+
     ctx.strokeStyle = "rgba(212,175,55,0.2)";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(POSTER_PAD + 12, DIV_Y);
-    ctx.lineTo(CARD_W - POSTER_PAD - 12, DIV_Y);
+    ctx.moveTo(CARD_W / 2 - onW / 2 - 40, DIV_Y);
+    ctx.lineTo(CARD_W / 2 - onW / 2 - 8, DIV_Y);
     ctx.stroke();
-
-    // Review excerpt
-    const reviewRaw = String(entry.review || "No review written.").trim();
-    ctx.fillStyle = "#a09c94";
-    ctx.font = "italic 16px Georgia, serif";
-    wrapText(ctx, `"${reviewRaw}"`, POSTER_PAD + 12, DIV_Y + 28, titleMaxW, 26, 3);
-
-    // ── branding bar ─────────────────────────────────────────────────────────
-    const BRAND_Y = CARD_H - 90;
-
-    ctx.strokeStyle = "rgba(212,175,55,0.15)";
-    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(POSTER_PAD + 12, BRAND_Y);
-    ctx.lineTo(CARD_W - POSTER_PAD - 12, BRAND_Y);
+    ctx.moveTo(CARD_W / 2 + onW / 2 + 8, DIV_Y);
+    ctx.lineTo(CARD_W / 2 + onW / 2 + 40, DIV_Y);
     ctx.stroke();
 
-    ctx.fillStyle = "rgba(212,175,55,0.4)";
-    ctx.font = "11px 'Courier New', monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("ON", CARD_W / 2, BRAND_Y + 22);
+    ctx.fillText(ON_LABEL, CARD_W / 2, DIV_Y + 7);
 
-    // Logo — use pre-loaded ref; fallback to text if not ready
+    // MyPOV logo
     const logoImg = logoRef.current;
-    if (logoImg && logoImg.complete) {
-      const LOGO_H = 44;
-      const LOGO_W = (logoImg.width / logoImg.height) * LOGO_H;
-      ctx.drawImage(logoImg, CARD_W / 2 - LOGO_W / 2, BRAND_Y + 30, LOGO_W, LOGO_H);
+    if (logoImg && logoImg.complete && logoImg.naturalWidth > 0) {
+      const LOGO_H = 64;
+      const LOGO_W = (logoImg.naturalWidth / logoImg.naturalHeight) * LOGO_H;
+      ctx.drawImage(logoImg, CARD_W / 2 - LOGO_W / 2, DIV_Y + 20, LOGO_W, LOGO_H);
     } else {
+      // Text fallback
       ctx.fillStyle = "#d4af37";
-      ctx.font = "bold 20px 'Courier New', monospace";
+      ctx.font = "bold 28px 'Courier New', monospace";
       ctx.textAlign = "center";
-      ctx.fillText("MY POV", CARD_W / 2, BRAND_Y + 58);
+      ctx.fillText("MY POV", CARD_W / 2, DIV_Y + 60);
     }
 
     ctx.textAlign = "left";
@@ -268,59 +233,59 @@ export default function ShareImageCard({ entry, onClose }) {
       <style>{`
         .sic-overlay {
           position: fixed; inset: 0;
-          background: rgba(0,0,0,0.88);
+          background: rgba(0,0,0,0.9);
           z-index: 9999;
           display: flex; align-items: center; justify-content: center;
           padding: 16px;
         }
         .sic-modal {
           background: #0d0b0f;
-          border: 1px solid rgba(212,175,55,0.22);
-          border-radius: 22px;
-          padding: 24px;
-          max-width: 480px; width: 100%;
-          display: flex; flex-direction: column; align-items: center; gap: 18px;
+          border: 1px solid rgba(212,175,55,0.2);
+          border-radius: 24px;
+          padding: 28px 24px;
+          max-width: 420px; width: 100%;
+          display: flex; flex-direction: column; align-items: center; gap: 20px;
           max-height: 96vh; overflow-y: auto;
         }
         .sic-title {
           font-family: 'Cinzel', serif;
-          color: #d4af37; font-size: 13px;
-          letter-spacing: 3px; text-transform: uppercase;
+          color: #d4af37; font-size: 12px;
+          letter-spacing: 4px; text-transform: uppercase;
         }
         .sic-canvas-wrap {
-          width: 100%; max-width: 340px;
-          border-radius: 14px; overflow: hidden;
-          box-shadow: 0 10px 50px rgba(0,0,0,0.8);
-          border: 1px solid rgba(212,175,55,0.15);
+          width: 100%; max-width: 300px;
+          border-radius: 16px; overflow: hidden;
+          box-shadow: 0 16px 60px rgba(0,0,0,0.9), 0 0 0 1px rgba(212,175,55,0.1);
         }
         .sic-canvas-wrap canvas { width: 100%; height: auto; display: block; }
         .sic-btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
         .sic-btn-gold {
           background: linear-gradient(135deg, #d4af37, #b8960c);
           color: #0a0803; border: none; border-radius: 30px;
-          padding: 11px 24px; font-family: 'Cinzel', serif;
-          font-size: 12px; letter-spacing: 2px; text-transform: uppercase;
-          cursor: pointer; transition: transform 0.2s;
+          padding: 12px 26px; font-family: 'Cinzel', serif;
+          font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+          cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
+          box-shadow: 0 4px 20px rgba(212,175,55,0.3);
         }
-        .sic-btn-gold:hover { transform: translateY(-2px); }
+        .sic-btn-gold:hover { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(212,175,55,0.45); }
         .sic-btn-ghost {
-          background: rgba(255,255,255,0.03);
+          background: transparent;
           border: 1px solid rgba(212,175,55,0.3);
           color: #d4af37; border-radius: 30px;
-          padding: 11px 24px; font-family: 'Cinzel', serif;
-          font-size: 12px; letter-spacing: 2px; text-transform: uppercase;
-          cursor: pointer; transition: transform 0.2s;
+          padding: 12px 26px; font-family: 'Cinzel', serif;
+          font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+          cursor: pointer; transition: transform 0.2s, border-color 0.2s;
         }
-        .sic-btn-ghost:hover { transform: translateY(-2px); }
+        .sic-btn-ghost:hover { transform: translateY(-2px); border-color: rgba(212,175,55,0.7); }
         .sic-status {
           font-family: 'DM Mono', monospace;
-          font-size: 12px; color: rgba(212,175,55,0.75);
+          font-size: 12px; color: rgba(212,175,55,0.8);
           text-align: center;
         }
         .sic-hint {
           font-family: 'DM Mono', monospace;
-          font-size: 11px; color: rgba(212,175,55,0.35);
-          text-align: center; line-height: 1.5;
+          font-size: 10px; color: rgba(255,255,255,0.2);
+          text-align: center; line-height: 1.6;
         }
       `}</style>
 
@@ -329,7 +294,7 @@ export default function ShareImageCard({ entry, onClose }) {
           <p className="sic-title">Share Your POV</p>
 
           {generating && (
-            <p className="sic-status" style={{ opacity: 0.5 }}>Generating card…</p>
+            <p className="sic-status" style={{ opacity: 0.4, fontSize: "11px" }}>Generating card…</p>
           )}
 
           <div className="sic-canvas-wrap">
@@ -344,7 +309,7 @@ export default function ShareImageCard({ entry, onClose }) {
                 <button className="sic-btn-ghost" onClick={onClose}>Close</button>
               </div>
               {status && <p className="sic-status">{status}</p>}
-              <p className="sic-hint">Save and post to Instagram, X, or any platform</p>
+              <p className="sic-hint">Save and post to Instagram, X, or any social platform</p>
             </>
           )}
         </div>
