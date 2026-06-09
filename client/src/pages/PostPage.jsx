@@ -1,10 +1,11 @@
 // src/components/PostPage.jsx
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { fetchGenres } from "../api/genre";
 import { apiFetch } from "../api/client";
 import { CinematicPlaceholder } from "../utils/placeholderImage";
 import { getMoviePath } from "../utils/movieLinks";
+import ShareImageCard from "../components/ShareImageCard";
 
 function getCurrentUser() {
   try {
@@ -28,6 +29,7 @@ function getShortReview(review, maxLength = 180) {
 
 function PostPage() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const isLoggedIn = Boolean(localStorage.getItem("token"));
   const currentUser = getCurrentUser();
@@ -36,6 +38,7 @@ function PostPage() {
   const [entry, setEntry] = useState(null);
   const [genreNames, setGenreNames] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
+  const [showShareImage, setShowShareImage] = useState(false);
   const [editForm, setEditForm] = useState({
     rating: "",
     review: "",
@@ -61,7 +64,7 @@ function PostPage() {
     setCommentPage(1);
     setHasMoreComments(true);
     setCommentError("");
-    setIsEditing(false);
+    setIsEditing(searchParams.get("edit") === "1");
     setEntryActionError("");
     setShareStatus("");
   }, [id]);
@@ -173,7 +176,7 @@ function PostPage() {
         }),
       });
       setEntry(updated);
-      setIsEditing(false);
+      setIsEditing(searchParams.get("edit") === "1");
     } catch (err) {
       console.error("Review update failed:", err);
       setEntryActionError(err.message || "Failed to update review");
@@ -504,6 +507,9 @@ function PostPage() {
                 <button type="button" onClick={shareReview} className="cinema-btn-muted">
                   Share Review
                 </button>
+                <button type="button" onClick={() => setShowShareImage(true)} className="cinema-btn-muted">
+                  Share as Image
+                </button>
                 {canManageEntry && (
                   <>
                     <button type="button" onClick={openEditForm} className="cinema-btn-muted">
@@ -635,6 +641,7 @@ function PostPage() {
               <button type="button" onClick={() => openShareWindow("x")} className="share-chip">X</button>
               <button type="button" onClick={() => openShareWindow("whatsapp")} className="share-chip">WhatsApp</button>
               <button type="button" onClick={() => openShareWindow("facebook")} className="share-chip">Facebook</button>
+              <button type="button" onClick={() => setShowShareImage(true)} className="share-chip" style={{background:"rgba(212,175,55,0.15)", fontWeight:"bold"}}>📸 Save Image</button>
             </div>
           </div>
         </div>
@@ -697,6 +704,9 @@ function PostPage() {
           )}
         </div>
       </div>
+      {showShareImage && entry && (
+        <ShareImageCard entry={entry} onClose={() => setShowShareImage(false)} />
+      )}
     </>
   );
 }

@@ -10,7 +10,6 @@ function PostCard({ entry, onDelete, disableDelete }) {
   const getPoster = () => {
     if (entry.poster) return entry.poster;
     if (entry.poster_path) return `https://image.tmdb.org/t/p/w500${entry.poster_path}`;
-    // Use a compact version of the placeholder for cards
     return CinematicPlaceholder({
       title: entry.title || "No Poster",
       width: 300,
@@ -29,6 +28,12 @@ function PostCard({ entry, onDelete, disableDelete }) {
     if (onDelete) onDelete(entry._id || entry.id);
   };
 
+  const handleEdit = (e) => {
+    e.stopPropagation();
+    // Navigate to PostPage; PostPage already has a full inline edit form
+    navigate(`/post/${entry._id || entry.id}?edit=1`);
+  };
+
   return (
     <>
       <style>{`
@@ -40,17 +45,30 @@ function PostCard({ entry, onDelete, disableDelete }) {
           letter-spacing: 2px;
           box-shadow: 0 0 8px rgba(212,175,55,0.4);
         }
-        .postcard-delete-btn {
+        .postcard-action-btn {
           transition: all 0.2s ease;
-          background: rgba(0,0,0,0.7);
+          background: rgba(0,0,0,0.75);
+          backdrop-filter: blur(4px);
           border: 1px solid rgba(212,175,55,0.3);
           color: #d4af37;
+          font-size: 11px;
+          font-family: 'DM Mono', monospace;
+          font-weight: 600;
+          letter-spacing: 0.06em;
+          padding: 4px 9px;
+          border-radius: 20px;
+          line-height: 1.4;
         }
-        .postcard-delete-btn:hover {
+        .postcard-action-btn:hover {
           background: #d4af37;
           color: #0a0803;
           border-color: #d4af37;
           transform: scale(1.05);
+        }
+        .postcard-action-btn.danger:hover {
+          background: #e05252;
+          border-color: #e05252;
+          color: #fff;
         }
         .postcard-rating {
           font-family: 'DM Mono', monospace;
@@ -95,6 +113,19 @@ function PostCard({ entry, onDelete, disableDelete }) {
           background: rgba(212,175,55,0.12);
           border-color: #d4af37;
         }
+        .postcard-top-actions {
+          position: absolute;
+          top: 10px;
+          right: 10px;
+          z-index: 10;
+          display: flex;
+          gap: 5px;
+          opacity: 0;
+          transition: opacity 0.2s ease;
+        }
+        .group:hover .postcard-top-actions {
+          opacity: 1;
+        }
       `}</style>
 
       <article
@@ -111,16 +142,28 @@ function PostCard({ entry, onDelete, disableDelete }) {
           </span>
         )}
 
-        {/* Delete Button */}
+        {/* Edit + Delete Buttons (top right, appear on hover) */}
         {!disableDelete && (
-          <button
-            type="button"
-            onClick={handleDelete}
-            className="postcard-delete-btn absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold opacity-0 shadow-lg transition group-hover:opacity-100"
-            aria-label="Delete entry"
-          >
-            ✕
-          </button>
+          <div className="postcard-top-actions">
+            <button
+              type="button"
+              onClick={handleEdit}
+              className="postcard-action-btn"
+              aria-label="Edit entry"
+              title="Edit review"
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="postcard-action-btn danger"
+              aria-label="Delete entry"
+              title="Delete review"
+            >
+              ✕
+            </button>
+          </div>
         )}
 
         {/* Poster Image */}
