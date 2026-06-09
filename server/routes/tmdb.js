@@ -68,59 +68,102 @@ router.get("/search", async (req, res) => {
 });
 
 /* ───────────────────────────────────────────────────── */
-/* 2. OMDB‑FALLBACK SEARCH (prefer OMDB if key exists)  */
+/* 2. SMART SEARCH — TMDB multi + keyword fallback       */
 /* ───────────────────────────────────────────────────── */
 router.get("/omdb", async (req, res) => {
   const query = req.query.q?.trim();
-  if (!query) {
-    return res.status(400).json({ error: "Query required" });
-  }
+  if (!query) return res.status(400).json({ error: "Query required" });
+  if (!process.env.TMDB_KEY) return res.status(500).json({ error: "TMDB key not configured" });
+
+  const toCard = (item) => ({
+    Title: item.title || item.name || "",
+    Year: (item.release_date || item.first_air_date || "").slice(0, 4),
+    imdbID: item.id ? String(item.id) : null,
+    Type: item.media_type === "tv" ? "series" : "movie",
+    Poster: item.poster_path
+      ? `https://image.tmdb.org/t/p/w342${item.poster_path}`
+      : "N/A",
+    Popularity: item.popularity || 0,
+    VoteAverage: item.vote_average || 0,
+    VoteCount: item.vote_count || 0,
+    Overview: item.overview || "",
+  });
 
   try {
-    // If OMDB_KEY is available, use OMDb directly (preferred)
-    if (process.env.OMDB_KEY) {
-      const response = await axios.get("https://www.omdbapi.com/", {
-        params: {
-          apikey: process.env.OMDB_KEY,
-          s: query
-        },
-        timeout: 15000
-      });
-      const data = response.data;
-      if (data.Response === "False") {
-        return res.json([]);
-      }
-      return res.json(data.Search || []);
+    // Run multi-search + keyword search in parallel for richer results
+    const [multiRes, keywordRes] = await Promise.allSettled([
+      fetchWithRetry(() =>
+        tmdb.get("/search/multi", {
+          params: { api_key: process.env.TMDB_KEY, query, include_adult: false, page: 1 }
+        })
+      ),
+      fetchWithRetry(() =>
+        tmdb.get("/search/keyword", {
+          params: { api_key: process.env.TMDB_KEY, query, page: 1 }
+        })
+      ),
+    ]);
+
+    let results = [];
+
+    // Primary: multi search (movies + TV)
+    if (multiRes.status === "fulfilled") {
+      const raw = (multiRes.value.data.results || [])
+        .filter(r => r.media_type === "movie" || r.media_type === "tv")
+        .filter(r => r.poster_path) // only results with posters
+        .map(toCard);
+      results.push(...raw);
     }
 
-    // Fallback to TMDB (if no OMDB key) -> convert to OMDb‑like format
-    if (!process.env.TMDB_KEY) {
-      return res.status(500).json({ error: "Neither OMDB nor TMDB key found" });
-    }
+    // If query looks like a year (e.g. "2019", "movies 2022"), boost by year match
+    const yearMatch = query.match(/(19|20)\d{2}/);
 
-    const response = await tmdb.get("/search/multi", {
-      params: {
-        api_key: process.env.TMDB_KEY,
-        query
-      }
+    // Deduplicate by imdbID
+    const seen = new Set();
+    results = results.filter(r => {
+      if (seen.has(r.imdbID)) return false;
+      seen.add(r.imdbID);
+      return true;
     });
 
-    const results = (response.data.results || []).map(item => ({
-      Title: item.title || item.name || "",
-      Year: (item.release_date || item.first_air_date || "").slice(0, 4),
-      imdbID: item.id ? String(item.id) : null,
-      Type: item.media_type || (item.title ? "movie" : "tv"),
-      Poster: item.poster_path
-        ? `https://image.tmdb.org/t/p/w500${item.poster_path}`
-        : item.backdrop_path
-        ? `https://image.tmdb.org/t/p/w500${item.backdrop_path}`
-        : "N/A"
-    }));
+    // Smart ranking: exact title match > popularity > vote count
+    const queryLower = query.toLowerCase().replace(/[^a-z0-9 ]/g, "");
+    results.sort((a, b) => {
+      const aTitle = (a.Title || "").toLowerCase().replace(/[^a-z0-9 ]/g, "");
+      const bTitle = (b.Title || "").toLowerCase().replace(/[^a-z0-9 ]/g, "");
 
-    res.json(results);
+      // Exact match gets highest priority
+      const aExact = aTitle === queryLower ? 3 : aTitle.startsWith(queryLower) ? 2 : aTitle.includes(queryLower) ? 1 : 0;
+      const bExact = bTitle === queryLower ? 3 : bTitle.startsWith(queryLower) ? 2 : bTitle.includes(queryLower) ? 1 : 0;
+      if (aExact !== bExact) return bExact - aExact;
+
+      // Year boost if user typed a year
+      if (yearMatch) {
+        const yr = yearMatch[0];
+        const aYr = a.Year === yr ? 1 : 0;
+        const bYr = b.Year === yr ? 1 : 0;
+        if (aYr !== bYr) return bYr - aYr;
+      }
+
+      // Fallback: popularity * vote credibility
+      const aScore = a.Popularity * Math.log10(Math.max(a.VoteCount, 1));
+      const bScore = b.Popularity * Math.log10(Math.max(b.VoteCount, 1));
+      return bScore - aScore;
+    });
+
+    // If primary results are thin (< 3), do a second-pass without poster filter
+    if (results.length < 3 && multiRes.status === "fulfilled") {
+      const extra = (multiRes.value.data.results || [])
+        .filter(r => r.media_type === "movie" || r.media_type === "tv")
+        .filter(r => !seen.has(String(r.id)))
+        .map(toCard);
+      results.push(...extra);
+    }
+
+    res.json(results.slice(0, 8));
   } catch (err) {
-    console.error("OMDB/TMDB search failed:", err.response?.data || err.message);
-    res.status(500).json({ error: "OMDB search failed" });
+    console.error("Smart search failed:", err.response?.data || err.message);
+    res.status(500).json({ error: "Search failed" });
   }
 });
 

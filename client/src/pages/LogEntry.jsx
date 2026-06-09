@@ -38,23 +38,33 @@ export default function LogEntry() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [movieDetails, setMovieDetails] = useState(null);
+  const [searching, setSearching] = useState(false);
+  const searchTimeout = useState(null);
 
   async function handleSearch(e) {
     const q = e.target.value;
     setQuery(q);
     if (q.length < 2) {
       setResults([]);
+      setSearching(false);
+      if (searchTimeout[0]) clearTimeout(searchTimeout[0]);
       return;
     }
-    try {
-      const data = await searchOMDB(q);
-      const unique = data.filter(
-        (m, i, s) => i === s.findIndex((x) => x.Title === m.Title)
-      );
-      setResults(unique.slice(0, 6));
-    } catch (err) {
-      console.error("Search failed:", err);
-    }
+    setSearching(true);
+    if (searchTimeout[0]) clearTimeout(searchTimeout[0]);
+    searchTimeout[0] = setTimeout(async () => {
+      try {
+        const data = await searchOMDB(q);
+        const unique = data.filter(
+          (m, i, s) => i === s.findIndex((x) => x.imdbID === m.imdbID)
+        );
+        setResults(unique.slice(0, 8));
+      } catch (err) {
+        console.error("Search failed:", err);
+      } finally {
+        setSearching(false);
+      }
+    }, 280);
   }
 
   async function selectMovie(movie) {
@@ -245,6 +255,10 @@ export default function LogEntry() {
       from { opacity: 0; transform: translateX(20px); }
       to   { opacity: 1; transform: translateX(0); }
     }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
     .movie-side-card {
       animation: slideInCard 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
     }
@@ -369,42 +383,98 @@ export default function LogEntry() {
               />
             </div>
 
-            {results.length > 0 && (
+            {/* Searching spinner */}
+            {searching && query.length >= 2 && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "12px 16px",
+                background: "rgba(10,8,3,0.95)",
+                border: "1px solid rgba(212,175,55,0.2)",
+                borderRadius: 12,
+                fontFamily: "'DM Mono', monospace",
+                fontSize: 12,
+                color: "rgba(212,175,55,0.6)",
+              }}>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ animation: "spin 0.8s linear infinite" }}>
+                  <circle cx="7" cy="7" r="5.5" stroke="rgba(212,175,55,0.3)" strokeWidth="1.5"/>
+                  <path d="M7 1.5A5.5 5.5 0 0 1 12.5 7" stroke="#d4af37" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+                Searching…
+              </div>
+            )}
+
+            {/* Results dropdown */}
+            {!searching && results.length > 0 && (
               <div className="search-dropdown">
                 {results.map((movie) => (
                   <div
                     key={movie.imdbID}
                     className="search-result"
                     onClick={() => selectMovie(movie)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 14,
-                      padding: "10px 14px",
-                    }}
+                    style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "10px 14px" }}
                   >
+                    {/* Poster thumbnail */}
                     <img
-                      src={
-                        movie.Poster && movie.Poster !== "N/A"
-                          ? movie.Poster
-                          : CinematicPlaceholder({ title: movie.Title, width: 40, height: 60 })
-                      }
-                      style={{ width: 32, height: 48, objectFit: "cover", borderRadius: 4 }}
+                      src={movie.Poster && movie.Poster !== "N/A" ? movie.Poster : CinematicPlaceholder({ title: movie.Title, width: 40, height: 56 })}
+                      style={{ width: 36, height: 54, objectFit: "cover", borderRadius: 5, flexShrink: 0 }}
                       alt=""
+                      onError={(e) => { e.target.src = CinematicPlaceholder({ title: movie.Title, width: 36, height: 54 }); }}
                     />
-                    <div>
-                      <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: "#f5f0e8" }}>
-                        {movie.Title}{" "}
-                        <span style={{ color: "rgba(212,175,55,0.5)", fontSize: 12 }}>
-                          ({movie.Year || "—"})
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {/* Title + year */}
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: "#f5f0e8", lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {movie.Title}
+                        {movie.Year && <span style={{ color: "rgba(212,175,55,0.55)", fontSize: 11, marginLeft: 5, fontFamily: "'DM Mono', monospace" }}>{movie.Year}</span>}
+                      </p>
+                      {/* Type + rating row */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
+                        <span style={{
+                          fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase",
+                          color: movie.Type === "series" ? "#a78bfa" : "#d4af37",
+                          background: movie.Type === "series" ? "rgba(167,139,250,0.1)" : "rgba(212,175,55,0.1)",
+                          border: movie.Type === "series" ? "1px solid rgba(167,139,250,0.25)" : "1px solid rgba(212,175,55,0.25)",
+                          borderRadius: 20, padding: "2px 7px",
+                          fontFamily: "'DM Mono', monospace",
+                        }}>
+                          {movie.Type === "series" ? "TV Series" : "Film"}
                         </span>
-                      </p>
-                      <p style={{ margin: "2px 0 0", fontSize: 12, color: "rgba(212,175,55,0.5)" }}>
-                        {movie.Type === "series" ? "TV Series" : "Film"}
-                      </p>
+                        {movie.VoteAverage > 0 && (
+                          <span style={{ fontSize: 10, color: "rgba(212,175,55,0.6)", fontFamily: "'DM Mono', monospace" }}>
+                            ★ {movie.VoteAverage.toFixed(1)}
+                          </span>
+                        )}
+                      </div>
+                      {/* Overview snippet */}
+                      {movie.Overview && (
+                        <p style={{
+                          margin: "4px 0 0", fontSize: 11,
+                          color: "rgba(245,240,232,0.4)",
+                          lineHeight: 1.4,
+                          display: "-webkit-box", WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical", overflow: "hidden",
+                          fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic",
+                        }}>
+                          {movie.Overview}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* No results */}
+            {!searching && results.length === 0 && query.length >= 2 && (
+              <div style={{
+                padding: "12px 16px",
+                background: "rgba(10,8,3,0.95)",
+                border: "1px solid rgba(212,175,55,0.15)",
+                borderRadius: 12,
+                fontFamily: "'DM Mono', monospace",
+                fontSize: 12,
+                color: "rgba(212,175,55,0.4)",
+              }}>
+                No results for "{query}"
               </div>
             )}
           </div>
