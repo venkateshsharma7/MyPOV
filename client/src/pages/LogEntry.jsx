@@ -96,7 +96,8 @@ export default function LogEntry() {
     if (movie.imdbID) {
       try {
         const API = import.meta.env.VITE_API_URL;
-        const res = await fetch(`${API}/tmdb/omdb-detail?id=${movie.imdbID}`);
+        const mediaType = movie.Type === "series" ? "tv" : "movie";
+        const res = await fetch(`${API}/tmdb/omdb-detail?id=${movie.imdbID}&type=${mediaType}`);
         if (res.ok) {
           const d = await res.json();
           if (d.Response !== "False") {
