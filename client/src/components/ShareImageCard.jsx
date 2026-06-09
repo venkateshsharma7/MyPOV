@@ -93,7 +93,6 @@ export default function ShareImageCard({ entry, onClose }) {
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
-    // Coordinate Setup
     const AR = 46;
     const AX = W / 2;
     const AY = 140;
@@ -200,18 +199,42 @@ export default function ShareImageCard({ entry, onClose }) {
     if (title !== (entry.title || "Untitled")) title = title.trimEnd() + "…";
     ctx.fillText(title, W / 2, TITLE_Y);
 
-    // ── 5. STARS ──────────────────────────────────────────────────────────────
+    // ── 5. PERFECT HALF-STARS USING CLIPPING MASK ─────────────────────────────
     const r = Number(entry.rating) || 0;
     const fullStars = Math.floor(r / 2);
     const halfStar = r % 2 >= 1;
-    const emptyStars = Math.max(0, 5 - fullStars - (halfStar ? 1 : 0));
-    const starStr = "★".repeat(fullStars) + (halfStar ? "½" : "") + "☆".repeat(emptyStars);
 
     const STAR_Y = TITLE_Y + 62;
     ctx.fillStyle = "#d4af37";
     ctx.font = "48px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(starStr, W / 2, STAR_Y);
+    
+    const starWidth = ctx.measureText("★").width;
+    const gap = 8; // Adjust gap between stars here if needed
+    const totalWidth = (starWidth * 5) + (gap * 4);
+    let currentX = (W - totalWidth) / 2 + (starWidth / 2);
+
+    for (let i = 0; i < 5; i++) {
+      if (i < fullStars) {
+        // Draw Full Star
+        ctx.fillText("★", currentX, STAR_Y);
+      } else if (i === fullStars && halfStar) {
+        // Draw Half Star (Empty star base + left-clipped filled star)
+        ctx.fillText("☆", currentX, STAR_Y); // Draw the empty outline
+        
+        ctx.save();
+        ctx.beginPath();
+        // Create a clipping rectangle covering exactly the left half of the character
+        ctx.rect(currentX - starWidth, STAR_Y - 50, starWidth, 60); 
+        ctx.clip();
+        ctx.fillText("★", currentX, STAR_Y); // This filled star only renders inside the clip mask
+        ctx.restore();
+      } else {
+        // Draw Empty Star
+        ctx.fillText("☆", currentX, STAR_Y);
+      }
+      currentX += starWidth + gap;
+    }
 
     // ── 6. USERNAME ───────────────────────────────────────────────────────────
     if (username) {
@@ -224,8 +247,8 @@ export default function ShareImageCard({ entry, onClose }) {
       ctx.fillText(userText, W / 2, USER_Y);
     }
 
-    // ── 7. BRANDING — "ON" + BIGGER LOGO ──────────────────────────────────────
-    const BRAND_Y = H - 150; // Shifted up slightly to accommodate the bigger logo
+    // ── 7. BRANDING ───────────────────────────────────────────────────────────
+    const BRAND_Y = H - 150; 
 
     ctx.strokeStyle = "rgba(255,255,255,0.15)";
     ctx.lineWidth = 1;
@@ -239,12 +262,12 @@ export default function ShareImageCard({ entry, onClose }) {
 
     const logo = logoRef.current;
     if (logo && logo.naturalWidth > 0) {
-      const LH = 86; // Increased from 60 to 86
+      const LH = 86;
       const LW = (logo.naturalWidth / logo.naturalHeight) * LH;
       ctx.drawImage(logo, W / 2 - LW / 2, BRAND_Y + 30, LW, LH);
     } else {
       ctx.fillStyle = "#d4af37";
-      ctx.font = "bold 34px sans-serif"; // Also made fallback text bigger
+      ctx.font = "bold 34px sans-serif";
       ctx.textAlign = "center";
       ctx.fillText("MY POV", W / 2, BRAND_Y + 70);
     }
