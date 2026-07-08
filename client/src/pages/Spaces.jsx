@@ -83,49 +83,44 @@ function Spaces() {
   const memberCount = spaces.reduce((sum, space) => sum + (space.memberCount || 0), 0);
 
   return (
-    <main className="spaces-chaos-page">
+    <main className="spaces-lounge-page">
       <style>{globalStyles}</style>
+      <div className="spaces-ambient" aria-hidden="true" />
 
-      <div className="chaos-noise" aria-hidden="true" />
-      <div className="ticker ticker-top" aria-hidden="true">
-        <span>HOT TAKES ONLY *** FAN WAR LOBBY *** JFF MODE *** PICK A SIDE *** NO BORING ENERGY *** </span>
-      </div>
-
-      <section className="chaos-shell">
-        <header className="chaos-hero">
+      <section className="spaces-shell">
+        <header className="spaces-hero">
           <div className="hero-copy">
-            <p className="chaos-eyebrow">MyPOV Spaces</p>
-            <h1>FAN WAR PLAYGROUND</h1>
-            <p className="chaos-subtitle">
-              Loud rooms for ridiculous takes, GIF comebacks, team loyalty, and harmless chaos.
+            <p className="spaces-eyebrow">MyPOV Spaces</p>
+            <h1>Fan rooms with taste.</h1>
+            <p className="spaces-subtitle">
+              A smoother corner for playful fan wars, sly comebacks, GIF energy, and group-chat drama that knows when to wink.
             </p>
             <div className="stat-row">
               <StatChip label="rooms" value={roomCount} />
-              <StatChip label="people" value={memberCount} />
-              <StatChip label="voice live" value={liveCount} />
+              <StatChip label="members" value={memberCount} />
+              <StatChip label="in voice" value={liveCount} />
             </div>
           </div>
 
-          <div className="hero-panel">
-            <div className="hero-card-smash">
-              <span className="burst-label">JFF</span>
-              <strong>Start a room. Pick teams. Let the takes fly.</strong>
-              <button type="button" className="chaos-primary" onClick={() => setShowCreate((value) => !value)}>
-                {showCreate ? "Close Lab" : "Create Madness"}
-              </button>
-            </div>
-          </div>
+          <aside className="hero-note">
+            <span>tonight's brief</span>
+            <strong>Defend your fave. Keep it funny.</strong>
+            <p>Private squads, public arenas, and enough mischief to make the timeline useful.</p>
+            <button type="button" className="primary-action" onClick={() => setShowCreate((value) => !value)}>
+              {showCreate ? "Close creator" : "Create a space"}
+            </button>
+          </aside>
         </header>
 
         {featured.length > 0 && (
-          <section className="featured-chaos">
-            {featured.map((space, index) => (
-              <SpaceTile key={space._id} index={index} space={space} large onJoin={handleJoin} />
+          <section className="featured-row">
+            {featured.map((space) => (
+              <SpaceTile key={space._id} space={space} large onJoin={handleJoin} />
             ))}
           </section>
         )}
 
-        <section className="control-deck">
+        <section className="control-bar">
           <div className="scope-switch" aria-label="Spaces scope">
             <button type="button" onClick={() => setScope("discover")} className={scope === "discover" ? "active" : ""}>
               Discover
@@ -138,16 +133,16 @@ function Spaces() {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search fandoms, ships, titles..."
-            className="chaos-search"
+            placeholder="Search fandoms, rivalries, titles..."
+            className="spaces-search"
           />
         </section>
 
         {showCreate && (
-          <form onSubmit={handleCreate} className="create-lab">
-            <div className="lab-header">
-              <span>ROOM BUILDER</span>
-              <strong>Make it unhinged, but JFF.</strong>
+          <form onSubmit={handleCreate} className="create-panel">
+            <div className="panel-heading">
+              <span>Space setup</span>
+              <strong>Make the room feel like an inside joke.</strong>
             </div>
 
             <div className="form-grid">
@@ -183,31 +178,30 @@ function Spaces() {
                 <input value={form.teamB} onChange={(event) => setForm({ ...form, teamB: event.target.value })} placeholder="Team Rival" />
               </label>
             </div>
-            <button type="submit" disabled={submitting} className="chaos-primary lab-submit">
-              {submitting ? "Launching..." : "Launch Space"}
+            <button type="submit" disabled={submitting} className="primary-action panel-submit">
+              {submitting ? "Opening..." : "Open the room"}
             </button>
           </form>
         )}
 
-        {error && <div className="chaos-error">{error}</div>}
+        {error && <div className="spaces-error">{error}</div>}
 
         {loading ? (
-          <div className="chaos-grid">
+          <div className="spaces-grid">
             {Array.from({ length: 8 }).map((_, index) => (
               <div key={index} className="skeleton-card" />
             ))}
           </div>
         ) : spaces.length === 0 ? (
-          <div className="empty-chaos">
-            <h2>No rooms yet.</h2>
-            <p>Someone has to light the scoreboard. Might as well be you.</p>
+          <div className="empty-state">
+            <h2>No spaces yet.</h2>
+            <p>The first funny room always feels slightly illegal.</p>
           </div>
         ) : (
-          <div className="chaos-grid">
-            {spaces.map((space, index) => (
+          <div className="spaces-grid">
+            {spaces.map((space) => (
               <SpaceTile
                 key={space._id}
-                index={index}
                 space={space}
                 onJoin={handleJoin}
                 inviteCode={inviteCodes[space._id] || ""}
@@ -217,10 +211,6 @@ function Spaces() {
           </div>
         )}
       </section>
-
-      <div className="ticker ticker-bottom" aria-hidden="true">
-        <span>SHIP DEFENSE *** MASS ENTRY *** ROAST RESPONSIBLY *** FAN BADGES SOON *** CHAOS NEVER SLEEPS *** </span>
-      </div>
     </main>
   );
 }
@@ -234,35 +224,33 @@ function StatChip({ label, value }) {
   );
 }
 
-function SpaceTile({ space, index = 0, large = false, onJoin, inviteCode = "", onInviteCode }) {
+function SpaceTile({ space, large = false, onJoin, inviteCode = "", onInviteCode }) {
   const locked = space.visibility === "private" && !space.viewer?.isMember && !space.viewer?.isInvited;
   const hasCover = Boolean(space.coverUrl);
   const liveCount = space.voiceRoom?.participantCount || 0;
-  const tilt = index % 2 === 0 ? "tilt-left" : "tilt-right";
 
   return (
     <article
-      className={`space-tile ${large ? "large" : ""} ${tilt}`}
+      className={`space-card ${large ? "large" : ""}`}
       style={{
         backgroundImage: hasCover
-          ? `linear-gradient(180deg, rgba(9,3,20,.08), rgba(9,3,20,.93)), url("${space.coverUrl}")`
+          ? `linear-gradient(180deg, rgba(12,14,24,.08), rgba(12,14,24,.88)), url("${space.coverUrl}")`
           : undefined,
       }}
     >
-      <div className="tile-stripes" aria-hidden="true" />
-      <div className="tile-topline">
+      <div className="card-topline">
         <span className={`privacy ${space.visibility === "private" ? "private" : ""}`}>{space.visibility}</span>
         <span className="joined">{space.memberCount} joined</span>
       </div>
 
-      <div className="tile-body">
-        <p className="room-tagline">{liveCount ? `${liveCount} yelling in voice` : "fresh takes wanted"}</p>
+      <div className="card-main">
+        <p className="room-kicker">{liveCount ? `${liveCount} live in voice` : "fresh room energy"}</p>
         <h2>{space.name}</h2>
-        <p className="tile-copy">{space.description || `${space.teamA} vs ${space.teamB}`}</p>
+        <p className="card-copy">{space.description || `${space.teamA} vs ${space.teamB}`}</p>
 
-        <div className="battle-board">
+        <div className="battle-line">
           <span>{space.teamA}</span>
-          <strong>VS</strong>
+          <strong>vs</strong>
           <span>{space.teamB}</span>
         </div>
 
@@ -274,7 +262,7 @@ function SpaceTile({ space, index = 0, large = false, onJoin, inviteCode = "", o
       </div>
 
       {space.viewer?.isMember ? (
-        <Link to={`/spaces/${space._id}`} className="tile-cta">Enter Arena</Link>
+        <Link to={`/spaces/${space._id}`} className="card-action">Enter</Link>
       ) : (
         <div className="join-stack">
           {locked && (
@@ -285,8 +273,8 @@ function SpaceTile({ space, index = 0, large = false, onJoin, inviteCode = "", o
               className="invite-code"
             />
           )}
-          <button type="button" className="tile-cta" onClick={() => onJoin(space)}>
-            {space.viewer?.isInvited ? "Accept Invite" : locked ? "Crack Private" : "Jump In"}
+          <button type="button" className="card-action" onClick={() => onJoin(space)}>
+            {space.viewer?.isInvited ? "Accept" : locked ? "Request vibe" : "Join"}
           </button>
         </div>
       )}
@@ -295,492 +283,418 @@ function SpaceTile({ space, index = 0, large = false, onJoin, inviteCode = "", o
 }
 
 const globalStyles = `
-  @import url('https://fonts.googleapis.com/css2?family=Bangers&family=Black+Ops+One&family=DM+Mono:wght@300;400;500&family=Inter:wght@600;800;900&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Inter:wght@500;600;700;800;900&display=swap');
 
-  .spaces-chaos-page {
+  .spaces-lounge-page {
     min-height: 100vh;
-    color: #19051f;
     overflow-x: hidden;
     position: relative;
+    color: #f7f3ea;
     background:
-      linear-gradient(135deg, rgba(255,255,255,.12) 25%, transparent 25%) 0 0 / 18px 18px,
-      linear-gradient(225deg, rgba(0,0,0,.10) 25%, transparent 25%) 0 0 / 18px 18px,
-      linear-gradient(120deg, #ffef3d 0%, #ff4fd8 32%, #35f4ff 63%, #75ff63 100%);
+      radial-gradient(circle at 18% 8%, rgba(245, 184, 80, .18), transparent 32%),
+      radial-gradient(circle at 82% 16%, rgba(81, 196, 184, .16), transparent 30%),
+      radial-gradient(circle at 48% 85%, rgba(229, 91, 134, .12), transparent 28%),
+      #0b0d14;
+    font-family: Inter, system-ui, sans-serif;
   }
-
-  .chaos-noise {
+  .spaces-ambient {
     position: fixed;
     inset: 0;
     pointer-events: none;
-    opacity: .18;
     background-image:
-      repeating-linear-gradient(0deg, rgba(25,5,31,.24) 0 1px, transparent 1px 6px),
-      radial-gradient(circle at 20% 20%, rgba(255,255,255,.6) 0 1px, transparent 1px 8px);
-    mix-blend-mode: multiply;
-    z-index: 0;
+      linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.028) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: linear-gradient(to bottom, rgba(0,0,0,.9), transparent 82%);
   }
-
-  .ticker {
-    position: fixed;
-    left: 0;
-    right: 0;
-    z-index: 5;
-    height: 32px;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    border-block: 3px solid #19051f;
-    background: #19051f;
-    color: #fff236;
-    font-family: 'Black Ops One', system-ui;
-    letter-spacing: .08em;
-    font-size: 14px;
-    transform: rotate(-1deg);
-  }
-  .ticker span {
-    white-space: nowrap;
-    animation: ticker 22s linear infinite;
-  }
-  .ticker-top { top: 7px; }
-  .ticker-bottom { bottom: 8px; transform: rotate(1deg); }
-
-  .chaos-shell {
+  .spaces-shell {
     position: relative;
     z-index: 1;
-    width: min(1260px, calc(100% - 28px));
+    width: min(1240px, calc(100% - 32px));
     margin: 0 auto;
-    padding: 72px 0 92px;
+    padding: 44px 0 84px;
   }
 
-  .chaos-hero {
-    min-height: 430px;
+  .spaces-hero {
     display: grid;
-    grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr);
-    gap: 26px;
+    grid-template-columns: minmax(0, 1.4fr) minmax(280px, .6fr);
+    gap: 18px;
     align-items: stretch;
-    margin-bottom: 28px;
+    margin-bottom: 22px;
   }
-
+  .hero-copy, .hero-note, .create-panel, .control-bar, .empty-state {
+    border: 1px solid rgba(255,255,255,.12);
+    background: linear-gradient(180deg, rgba(255,255,255,.105), rgba(255,255,255,.045));
+    box-shadow: 0 24px 70px rgba(0,0,0,.32);
+    backdrop-filter: blur(18px);
+  }
   .hero-copy {
+    min-height: 360px;
+    border-radius: 28px;
+    padding: clamp(28px, 5vw, 58px);
     position: relative;
-    padding: clamp(24px, 5vw, 52px);
-    border: 5px solid #19051f;
-    background:
-      repeating-linear-gradient(-12deg, rgba(255,255,255,.35) 0 9px, transparent 9px 18px),
-      #fffaf0;
-    box-shadow: 14px 14px 0 #19051f;
-    transform: rotate(-1deg);
+    overflow: hidden;
   }
   .hero-copy::after {
-    content: 'BANG!';
+    content: "JFF, but with standards";
     position: absolute;
     right: 24px;
     top: 22px;
-    padding: 8px 16px;
-    border: 4px solid #19051f;
-    background: #75ff63;
-    font-family: 'Bangers', cursive;
-    font-size: 32px;
-    transform: rotate(9deg);
-  }
-
-  .chaos-eyebrow {
-    margin: 0 0 12px;
-    display: inline-flex;
-    padding: 8px 13px;
-    border: 3px solid #19051f;
-    background: #35f4ff;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(245,184,80,.15);
+    color: #f5b850;
     font-family: 'DM Mono', monospace;
-    font-size: 12px;
+    font-size: 11px;
+    border: 1px solid rgba(245,184,80,.32);
+  }
+  .spaces-eyebrow {
+    display: inline-flex;
+    margin: 0 0 16px;
+    padding: 7px 11px;
+    border-radius: 999px;
+    border: 1px solid rgba(81,196,184,.35);
+    color: #82efe4;
+    background: rgba(81,196,184,.08);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: .12em;
     text-transform: uppercase;
-    letter-spacing: .2em;
-    font-weight: 900;
   }
   .hero-copy h1 {
+    max-width: 740px;
     margin: 0;
-    max-width: 760px;
-    font-family: 'Bangers', cursive;
-    font-size: clamp(64px, 12vw, 148px);
-    line-height: .78;
-    letter-spacing: .02em;
-    color: #19051f;
-    text-shadow: 6px 6px 0 #ffef3d, 10px 10px 0 #ff4fd8;
-  }
-  .chaos-subtitle {
-    max-width: 650px;
-    margin: 26px 0 0;
-    font-family: Inter, system-ui;
-    font-size: clamp(16px, 2vw, 22px);
-    line-height: 1.35;
+    font-size: clamp(48px, 8vw, 104px);
+    line-height: .88;
+    letter-spacing: -0.06em;
     font-weight: 900;
   }
-
+  .spaces-subtitle {
+    max-width: 660px;
+    margin: 20px 0 0;
+    color: rgba(247,243,234,.72);
+    font-size: clamp(15px, 2vw, 19px);
+    line-height: 1.55;
+    font-weight: 600;
+  }
   .stat-row {
     display: flex;
-    gap: 12px;
+    gap: 10px;
     flex-wrap: wrap;
-    margin-top: 26px;
+    margin-top: 28px;
   }
   .stat-chip {
-    min-width: 106px;
-    padding: 10px 14px;
-    border: 3px solid #19051f;
-    background: #ffef3d;
-    box-shadow: 5px 5px 0 #19051f;
-    transform: skew(-6deg);
+    min-width: 104px;
+    border-radius: 18px;
+    padding: 13px 15px;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(255,255,255,.075);
   }
   .stat-chip strong {
     display: block;
-    font-family: 'Black Ops One', system-ui;
-    font-size: 26px;
+    font-size: 28px;
+    line-height: 1;
   }
   .stat-chip span {
     display: block;
+    margin-top: 5px;
+    color: rgba(247,243,234,.58);
     font-family: 'DM Mono', monospace;
     font-size: 10px;
     text-transform: uppercase;
   }
 
-  .hero-panel {
-    display: grid;
-    align-items: end;
-  }
-  .hero-card-smash {
-    min-height: 330px;
-    padding: 26px;
+  .hero-note {
+    border-radius: 28px;
+    padding: 24px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    border: 5px solid #19051f;
-    background:
-      radial-gradient(circle at 30% 24%, #fff 0 2px, transparent 3px 10px),
-      #ff4fd8;
-    box-shadow: -12px 14px 0 #19051f;
-    transform: rotate(2deg);
+    min-height: 320px;
   }
-  .burst-label {
-    width: 110px;
-    height: 110px;
-    display: grid;
-    place-items: center;
-    border: 4px solid #19051f;
-    border-radius: 999px;
-    background: #fff236;
-    font-family: 'Bangers', cursive;
-    font-size: 48px;
-    transform: rotate(-13deg);
+  .hero-note span, .panel-heading span {
+    color: #f5b850;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .14em;
   }
-  .hero-card-smash strong {
-    font-family: Inter, system-ui;
-    font-size: 28px;
+  .hero-note strong {
+    display: block;
+    margin-top: 16px;
+    font-size: 30px;
     line-height: 1.05;
-    font-weight: 900;
+    letter-spacing: -0.04em;
+  }
+  .hero-note p {
+    color: rgba(247,243,234,.62);
+    line-height: 1.5;
   }
 
-  .chaos-primary, .tile-cta {
-    border: 4px solid #19051f;
-    background: #75ff63;
-    color: #19051f;
-    box-shadow: 6px 6px 0 #19051f;
-    padding: 12px 18px;
-    font-family: 'Black Ops One', system-ui;
-    font-size: 14px;
-    text-transform: uppercase;
+  .primary-action, .card-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    border: 0;
+    border-radius: 999px;
+    padding: 0 18px;
+    background: linear-gradient(135deg, #f5b850, #e55b86);
+    color: #11131b;
+    font-weight: 900;
     text-decoration: none;
     cursor: pointer;
-    transition: transform .14s ease, box-shadow .14s ease, background .14s ease;
+    box-shadow: 0 12px 30px rgba(229,91,134,.24);
+    transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
   }
-  .chaos-primary:hover, .tile-cta:hover {
-    transform: translate(3px, 3px) rotate(-1deg);
-    box-shadow: 3px 3px 0 #19051f;
-    background: #35f4ff;
+  .primary-action:hover, .card-action:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 18px 42px rgba(229,91,134,.32);
+    filter: saturate(1.08);
   }
-  .chaos-primary:disabled { opacity: .55; cursor: not-allowed; }
+  .primary-action:disabled { opacity: .55; cursor: not-allowed; }
 
-  .featured-chaos, .chaos-grid {
+  .featured-row, .spaces-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(282px, 1fr));
-    gap: 22px;
+    gap: 16px;
   }
-  .featured-chaos {
-    margin-bottom: 24px;
-  }
+  .featured-row { margin-bottom: 18px; }
 
-  .control-deck {
+  .control-bar {
     position: sticky;
-    top: 46px;
+    top: 12px;
     z-index: 4;
     display: flex;
-    gap: 14px;
+    gap: 12px;
     align-items: center;
     flex-wrap: wrap;
-    padding: 14px;
-    margin: 0 0 24px;
-    border: 4px solid #19051f;
-    background: #fffaf0;
-    box-shadow: 8px 8px 0 #19051f;
-    transform: rotate(.5deg);
+    margin: 0 0 18px;
+    padding: 12px;
+    border-radius: 22px;
   }
   .scope-switch {
     display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
+    padding: 4px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.1);
   }
   .scope-switch button {
-    border: 3px solid #19051f;
-    background: #35f4ff;
-    color: #19051f;
-    padding: 10px 14px;
-    font-family: 'Black Ops One', system-ui;
+    border: 0;
+    border-radius: 999px;
+    padding: 9px 14px;
+    background: transparent;
+    color: rgba(247,243,234,.62);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
     text-transform: uppercase;
     cursor: pointer;
   }
   .scope-switch button.active {
-    background: #ffef3d;
-    transform: rotate(-2deg);
-    box-shadow: 4px 4px 0 #19051f;
+    background: rgba(247,243,234,.92);
+    color: #11131b;
   }
-  .chaos-search {
+  .spaces-search {
     flex: 1 1 280px;
     min-width: 220px;
-    border: 4px solid #19051f;
-    background: #19051f;
-    color: #fffaf0;
-    padding: 13px 15px;
+    border: 1px solid rgba(255,255,255,.1);
+    background: rgba(255,255,255,.065);
+    color: #f7f3ea;
+    border-radius: 999px;
+    padding: 12px 16px;
     font-family: 'DM Mono', monospace;
-    font-size: 14px;
+    font-size: 13px;
   }
-  .chaos-search::placeholder { color: rgba(255,250,240,.68); }
+  .spaces-search::placeholder { color: rgba(247,243,234,.42); }
 
-  .create-lab {
-    margin-bottom: 26px;
-    padding: 20px;
-    border: 5px solid #19051f;
-    background: #35f4ff;
-    box-shadow: 12px 12px 0 #19051f;
-    transform: rotate(-.5deg);
+  .create-panel {
+    margin-bottom: 18px;
+    border-radius: 24px;
+    padding: 18px;
   }
-  .lab-header {
+  .panel-heading {
     display: flex;
     justify-content: space-between;
     gap: 14px;
     flex-wrap: wrap;
     margin-bottom: 16px;
-    font-family: 'Black Ops One', system-ui;
-    text-transform: uppercase;
   }
-  .lab-header span {
-    background: #ff4fd8;
-    border: 3px solid #19051f;
-    padding: 7px 10px;
+  .panel-heading strong {
+    color: rgba(247,243,234,.72);
   }
   .form-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 13px;
+    gap: 12px;
   }
   .form-grid label {
     display: flex;
     flex-direction: column;
     gap: 7px;
+    color: rgba(247,243,234,.64);
     font-family: 'DM Mono', monospace;
     font-size: 11px;
-    font-weight: 900;
     text-transform: uppercase;
   }
   .form-grid .wide { grid-column: 1 / -1; }
   .form-grid input, .form-grid textarea, .form-grid select {
-    border: 3px solid #19051f;
-    background: #fffaf0;
-    color: #19051f;
-    padding: 11px;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(7,9,14,.68);
+    color: #f7f3ea;
+    border-radius: 16px;
+    padding: 12px;
     font-family: 'DM Mono', monospace;
-    font-size: 13px;
   }
-  .lab-submit { margin-top: 16px; }
+  .panel-submit { margin-top: 14px; }
 
-  .chaos-error {
-    border: 4px solid #19051f;
-    background: #ff4b4b;
-    color: #fff;
-    box-shadow: 7px 7px 0 #19051f;
+  .spaces-error {
+    border: 1px solid rgba(229,91,134,.35);
+    background: rgba(229,91,134,.12);
+    color: #ffd5df;
+    border-radius: 18px;
     padding: 13px 16px;
     margin-bottom: 18px;
-    font-family: 'Black Ops One', system-ui;
   }
 
-  .space-tile {
-    position: relative;
-    min-height: 320px;
+  .space-card {
+    min-height: 310px;
     overflow: hidden;
+    position: relative;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    border-radius: 26px;
     padding: 18px;
-    border: 5px solid #19051f;
+    border: 1px solid rgba(255,255,255,.12);
     background:
-      linear-gradient(135deg, rgba(255,255,255,.30), transparent 35%),
-      linear-gradient(145deg, #fff236, #ff4fd8 58%, #35f4ff);
+      linear-gradient(150deg, rgba(255,255,255,.12), rgba(255,255,255,.035)),
+      radial-gradient(circle at 18% 8%, rgba(245,184,80,.20), transparent 34%),
+      radial-gradient(circle at 88% 12%, rgba(81,196,184,.18), transparent 30%),
+      #11131b;
     background-size: cover;
     background-position: center;
-    box-shadow: 10px 10px 0 #19051f;
-    isolation: isolate;
-    transition: transform .16s ease, box-shadow .16s ease;
+    box-shadow: 0 20px 60px rgba(0,0,0,.3);
+    transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
   }
-  .space-tile:hover {
-    transform: rotate(0deg) translateY(-7px) scale(1.015);
-    box-shadow: 14px 16px 0 #19051f;
+  .space-card:hover {
+    transform: translateY(-5px);
+    border-color: rgba(245,184,80,.36);
+    box-shadow: 0 26px 75px rgba(0,0,0,.38);
   }
-  .space-tile.large { min-height: 370px; }
-  .tilt-left { transform: rotate(-1.2deg); }
-  .tilt-right { transform: rotate(1.2deg); }
-  .tile-stripes {
-    position: absolute;
-    inset: auto -30px -48px -30px;
-    height: 110px;
-    background: repeating-linear-gradient(45deg, #19051f 0 12px, #fff236 12px 24px);
-    opacity: .85;
-    z-index: -1;
-    transform: rotate(-4deg);
-  }
-  .tile-topline {
+  .space-card.large { min-height: 350px; }
+  .card-topline {
     display: flex;
-    align-items: center;
     justify-content: space-between;
     gap: 10px;
+    align-items: center;
   }
-  .privacy, .joined, .room-tagline {
-    border: 3px solid #19051f;
-    background: #fffaf0;
-    color: #19051f;
+  .privacy, .joined, .room-kicker, .tag-cloud span {
+    display: inline-flex;
+    border-radius: 999px;
     padding: 6px 9px;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(255,255,255,.1);
+    color: rgba(247,243,234,.74);
     font-family: 'DM Mono', monospace;
-    font-weight: 900;
     font-size: 10px;
     text-transform: uppercase;
   }
-  .privacy.private { background: #ff4b4b; color: #fff; }
-  .joined { background: #75ff63; }
-  .room-tagline {
-    display: inline-flex;
-    margin: 18px 0 10px;
-    background: #35f4ff;
-  }
-  .space-tile h2 {
+  .privacy.private { color: #ffd5df; background: rgba(229,91,134,.14); }
+  .joined { color: #d7fff9; background: rgba(81,196,184,.12); }
+  .room-kicker { margin: 24px 0 11px; color: #f5b850; background: rgba(245,184,80,.12); }
+  .space-card h2 {
     margin: 0;
-    font-family: 'Bangers', cursive;
-    font-size: clamp(38px, 5vw, 62px);
-    line-height: .9;
-    color: #fffaf0;
-    text-shadow: 4px 4px 0 #19051f, 8px 8px 0 #ff4fd8;
+    font-size: 34px;
+    line-height: 1;
+    letter-spacing: -0.05em;
     overflow-wrap: anywhere;
   }
-  .tile-copy {
-    min-height: 44px;
+  .card-copy {
+    min-height: 48px;
     margin: 12px 0 0;
-    padding: 10px;
-    border: 3px solid #19051f;
-    background: rgba(255,250,240,.88);
-    font-family: Inter, system-ui;
-    font-weight: 900;
-    line-height: 1.25;
+    color: rgba(247,243,234,.68);
+    line-height: 1.45;
+    font-size: 13px;
   }
-  .battle-board {
+  .battle-line {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     gap: 8px;
     align-items: center;
-    margin-top: 13px;
+    margin-top: 15px;
   }
-  .battle-board span, .battle-board strong {
-    border: 3px solid #19051f;
-    background: #fffaf0;
-    padding: 7px 8px;
+  .battle-line span, .battle-line strong {
+    min-width: 0;
+    border-radius: 14px;
+    padding: 8px 9px;
     text-align: center;
-    font-family: 'Black Ops One', system-ui;
-    font-size: 11px;
+    background: rgba(255,255,255,.08);
+    color: rgba(247,243,234,.78);
+    font-size: 12px;
+    font-weight: 800;
     overflow-wrap: anywhere;
   }
-  .battle-board strong {
-    background: #ff4b4b;
-    color: #fff;
-    transform: rotate(-5deg);
+  .battle-line strong {
+    color: #11131b;
+    background: #f5b850;
   }
   .tag-cloud {
     display: flex;
     flex-wrap: wrap;
-    gap: 7px;
+    gap: 6px;
     margin-top: 12px;
-  }
-  .tag-cloud span {
-    border: 2px solid #19051f;
-    background: #fff236;
-    padding: 4px 8px;
-    font-family: 'DM Mono', monospace;
-    font-size: 10px;
-    font-weight: 900;
   }
   .join-stack {
     display: flex;
     align-items: flex-end;
     gap: 9px;
     flex-wrap: wrap;
-    margin-top: 16px;
+    margin-top: 18px;
   }
   .invite-code {
     min-width: 148px;
-    border: 3px solid #19051f;
-    background: #fffaf0;
-    color: #19051f;
-    padding: 10px;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(7,9,14,.68);
+    color: #f7f3ea;
+    border-radius: 999px;
+    padding: 11px 12px;
     font-family: 'DM Mono', monospace;
   }
   .skeleton-card {
-    min-height: 320px;
-    border: 5px solid #19051f;
-    background: repeating-linear-gradient(-20deg, #fff236 0 18px, #ff4fd8 18px 36px);
-    box-shadow: 10px 10px 0 #19051f;
-    animation: wobble 1.2s ease-in-out infinite alternate;
+    min-height: 310px;
+    border-radius: 26px;
+    background: linear-gradient(110deg, rgba(255,255,255,.08), rgba(255,255,255,.16), rgba(255,255,255,.08));
+    animation: shimmer 1.3s ease infinite;
   }
-  .empty-chaos {
-    border: 5px solid #19051f;
-    background: #fffaf0;
-    box-shadow: 12px 12px 0 #19051f;
-    padding: 52px 20px;
+  .empty-state {
+    border-radius: 24px;
+    padding: 56px 20px;
     text-align: center;
-    transform: rotate(-1deg);
   }
-  .empty-chaos h2 {
+  .empty-state h2 {
     margin: 0;
-    font-family: 'Bangers', cursive;
-    font-size: 64px;
+    font-size: 34px;
+    letter-spacing: -0.04em;
   }
-  .empty-chaos p {
-    margin: 10px 0 0;
-    font-family: Inter, system-ui;
-    font-weight: 900;
+  .empty-state p {
+    margin: 8px 0 0;
+    color: rgba(247,243,234,.62);
   }
 
-  @keyframes ticker {
-    from { transform: translateX(0); }
-    to { transform: translateX(-50%); }
-  }
-  @keyframes wobble {
-    from { transform: rotate(-1deg); filter: saturate(1); }
-    to { transform: rotate(1deg); filter: saturate(1.4); }
+  @keyframes shimmer {
+    0%, 100% { opacity: .55; }
+    50% { opacity: 1; }
   }
 
   @media (max-width: 880px) {
-    .chaos-hero { grid-template-columns: 1fr; }
-    .hero-copy::after { right: 12px; top: 10px; font-size: 24px; }
-    .control-deck { position: relative; top: auto; }
+    .spaces-hero { grid-template-columns: 1fr; }
+    .control-bar { position: relative; top: auto; }
   }
   @media (max-width: 560px) {
-    .chaos-shell { width: min(100% - 18px, 1260px); padding-top: 60px; }
-    .hero-copy, .hero-card-smash, .create-lab, .space-tile, .control-deck { box-shadow: 6px 6px 0 #19051f; }
-    .hero-copy h1 { font-size: 64px; }
-    .ticker { font-size: 11px; height: 27px; }
-    .battle-board { grid-template-columns: 1fr; }
+    .spaces-shell { width: min(100% - 18px, 1240px); padding-top: 28px; }
+    .hero-copy::after { position: static; display: inline-flex; margin-top: 18px; }
+    .battle-line { grid-template-columns: 1fr; }
   }
 `;
 

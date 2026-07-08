@@ -326,10 +326,10 @@ function SpaceRoom() {
         <header style={styles.roomHeader}>
           <div style={styles.headerArt(space?.coverUrl)}>
             <div style={styles.headerOverlay}>
-              <Link to="/spaces" style={styles.backLink}>Back to chaos</Link>
+              <Link to="/spaces" style={styles.backLink}>Back to Spaces</Link>
               <div style={styles.headerMain}>
                 <div>
-                  <p style={styles.eyebrow}>{space.visibility} space // live arena</p>
+                  <p style={styles.eyebrow}>{space.visibility} space / lightly unserious</p>
                   <h1 style={styles.title}>{space.name}</h1>
                   <p style={styles.subtitle}>{space.description || `${space.teamA} vs ${space.teamB}`}</p>
                 </div>
@@ -340,7 +340,7 @@ function SpaceRoom() {
               </div>
               <div style={styles.teamBar}>
                 <span>{space.teamA}</span>
-                <strong>FAN WAR</strong>
+                <strong>Fan war, but make it charming</strong>
                 <span>{space.teamB}</span>
               </div>
             </div>
@@ -453,11 +453,11 @@ function SpaceRoom() {
             {canChat && (
               <section style={styles.voicePanel}>
                 <div>
-                <h2 style={styles.sideTitle}>Voice Riot</h2>
+                <h2 style={styles.sideTitle}>Voice Corner</h2>
                 <p style={styles.voiceCopy}>
                   {space.voiceRoom?.active
                       ? `${space.voiceRoom.participantCount} live in voice`
-                      : "Open the mic pit."}
+                      : "Open the mic and behave dramatically."}
                   </p>
                 </div>
                 <div style={styles.voiceActions}>
@@ -489,7 +489,7 @@ function SpaceRoom() {
             )}
 
             <section style={styles.sideSection}>
-              <h2 style={styles.sideTitle}>Crowd</h2>
+              <h2 style={styles.sideTitle}>People Here</h2>
               <div style={styles.memberList}>
                 {(space.members || []).map((member) => (
                   <Link key={member.user?._id || member.user} to={`/user/${member.user?.username}`} style={styles.member}>
@@ -627,14 +627,14 @@ function typingLabel(typingUsers) {
 }
 
 const globalStyles = `
-  @import url('https://fonts.googleapis.com/css2?family=Bangers&family=Black+Ops+One&family=DM+Mono:wght@300;400;500&family=Inter:wght@700;800;900&display=swap');
-  .space-room-chaos input:focus, .space-room-chaos textarea:focus { outline: 3px solid #35f4ff; }
-  .space-room-chaos *::selection { background: #fff236; color: #19051f; }
-  .space-room-chaos ::-webkit-scrollbar { width: 13px; }
-  .space-room-chaos ::-webkit-scrollbar-track { background: #19051f; }
-  .space-room-chaos ::-webkit-scrollbar-thumb { background: #ff4fd8; border: 3px solid #19051f; }
-  .chat-status-chaos span:not(:empty)::before { content: 'LIVE: '; font-family: 'Black Ops One', system-ui; font-style: normal; }
-  .composer-chaos { box-shadow: 0 -8px 0 #19051f; }
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Inter:wght@500;600;700;800;900&display=swap');
+  .space-room-chaos input:focus, .space-room-chaos textarea:focus { outline: 2px solid rgba(245,184,80,.55); outline-offset: 2px; }
+  .space-room-chaos *::selection { background: rgba(245,184,80,.35); color: #f7f3ea; }
+  .space-room-chaos ::-webkit-scrollbar { width: 10px; }
+  .space-room-chaos ::-webkit-scrollbar-track { background: rgba(255,255,255,.04); }
+  .space-room-chaos ::-webkit-scrollbar-thumb { background: rgba(245,184,80,.38); border-radius: 999px; }
+  .chat-status-chaos span:not(:empty)::before { content: 'typing: '; color: rgba(245,184,80,.9); font-style: normal; }
+  .composer-chaos { box-shadow: 0 -18px 34px rgba(0,0,0,.18); }
   @media (max-width: 860px) {
     .space-room-layout { grid-template-columns: 1fr !important; }
     .space-chat-panel { height: 72vh !important; min-height: 520px !important; }
@@ -648,95 +648,97 @@ const globalStyles = `
 const styles = {
   page: {
     minHeight: "100vh",
-    color: "#19051f",
+    color: "#f7f3ea",
     position: "relative",
     overflowX: "hidden",
     background:
-      "linear-gradient(135deg, rgba(255,255,255,.12) 25%, transparent 25%) 0 0 / 18px 18px, linear-gradient(225deg, rgba(0,0,0,.1) 25%, transparent 25%) 0 0 / 18px 18px, linear-gradient(120deg, #35f4ff 0%, #ff4fd8 36%, #fff236 67%, #75ff63 100%)",
+      "radial-gradient(circle at 18% 8%, rgba(245,184,80,.18), transparent 32%), radial-gradient(circle at 84% 14%, rgba(81,196,184,.16), transparent 30%), radial-gradient(circle at 50% 88%, rgba(229,91,134,.12), transparent 30%), #0b0d14",
+    fontFamily: "Inter, system-ui, sans-serif",
   },
   backdrop: {
     position: "fixed",
     inset: 0,
     background:
-      "repeating-linear-gradient(0deg, rgba(25,5,31,.16) 0 1px, transparent 1px 7px), radial-gradient(circle at 20% 20%, rgba(255,255,255,.55) 0 1px, transparent 1px 9px)",
+      "linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.026) 1px, transparent 1px)",
+    backgroundSize: "44px 44px",
     pointerEvents: "none",
-    mixBlendMode: "multiply",
-    opacity: .5,
+    opacity: .7,
   },
   shell: { maxWidth: 1320, margin: "0 auto", padding: "22px 18px 70px", position: "relative", zIndex: 1 },
-  loading: { minHeight: "70vh", display: "grid", placeItems: "center", fontFamily: "'Black Ops One', system-ui", color: "#19051f" },
+  loading: { minHeight: "70vh", display: "grid", placeItems: "center", fontFamily: "'DM Mono', monospace", color: "#f5b850" },
   errorFull: { minHeight: "70vh", display: "grid", placeItems: "center", textAlign: "center", fontFamily: "'DM Mono', monospace" },
-  linkButton: { color: "#19051f", background: "#75ff63", textDecoration: "none", border: "4px solid #19051f", boxShadow: "5px 5px 0 #19051f", padding: "11px 16px", fontFamily: "'Black Ops One', system-ui", textTransform: "uppercase", letterSpacing: ".08em" },
+  linkButton: { color: "#11131b", background: "#f5b850", textDecoration: "none", borderRadius: 999, padding: "11px 16px", fontWeight: 900 },
   roomHeader: { marginBottom: 18 },
   headerArt: (coverUrl) => ({
     minHeight: 350,
-    border: "5px solid #19051f",
-    boxShadow: "12px 12px 0 #19051f",
+    border: "1px solid rgba(255,255,255,.12)",
+    borderRadius: 30,
+    boxShadow: "0 24px 80px rgba(0,0,0,.35)",
     backgroundImage: coverUrl
-      ? `linear-gradient(180deg, rgba(255,79,216,.05), rgba(25,5,31,.92)), url("${coverUrl}")`
-      : "linear-gradient(135deg, rgba(255,255,255,.22), transparent 35%), linear-gradient(145deg, #fff236, #ff4fd8 58%, #35f4ff)",
+      ? `linear-gradient(180deg, rgba(12,14,24,.18), rgba(12,14,24,.92)), url("${coverUrl}")`
+      : "linear-gradient(135deg, rgba(255,255,255,.11), rgba(255,255,255,.04)), radial-gradient(circle at 18% 12%, rgba(245,184,80,.20), transparent 35%), radial-gradient(circle at 88% 16%, rgba(81,196,184,.17), transparent 32%), #11131b",
     backgroundSize: "cover",
     backgroundPosition: "center",
     overflow: "hidden",
-    transform: "rotate(-.5deg)",
+    backdropFilter: "blur(18px)",
   }),
   headerOverlay: { minHeight: 350, padding: 24, display: "flex", flexDirection: "column", justifyContent: "space-between" },
-  backLink: { alignSelf: "flex-start", color: "#19051f", background: "#fff236", border: "3px solid #19051f", boxShadow: "4px 4px 0 #19051f", padding: "8px 11px", textDecoration: "none", fontFamily: "'Black Ops One', system-ui", fontSize: 12, textTransform: "uppercase", letterSpacing: ".08em" },
+  backLink: { alignSelf: "flex-start", color: "#f7f3ea", background: "rgba(255,255,255,.09)", border: "1px solid rgba(255,255,255,.14)", borderRadius: 999, padding: "8px 12px", textDecoration: "none", fontFamily: "'DM Mono', monospace", fontSize: 11, textTransform: "uppercase", letterSpacing: ".08em" },
   headerMain: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 18, flexWrap: "wrap" },
-  eyebrow: { display: "inline-flex", margin: "0 0 10px", color: "#19051f", background: "#35f4ff", border: "3px solid #19051f", padding: "6px 9px", fontFamily: "'DM Mono', monospace", fontWeight: 900, fontSize: 11, textTransform: "uppercase", letterSpacing: ".14em" },
-  title: { margin: 0, fontFamily: "'Bangers', cursive", fontSize: "clamp(54px, 9vw, 120px)", lineHeight: .78, color: "#fffaf0", textShadow: "5px 5px 0 #19051f, 10px 10px 0 #ff4fd8", letterSpacing: ".02em" },
-  subtitle: { margin: "18px 0 0", maxWidth: 740, color: "#fffaf0", textShadow: "2px 2px 0 #19051f", fontFamily: "Inter, system-ui", fontWeight: 900, fontSize: 17, lineHeight: 1.35 },
+  eyebrow: { display: "inline-flex", margin: "0 0 10px", color: "#82efe4", background: "rgba(81,196,184,.09)", border: "1px solid rgba(81,196,184,.32)", borderRadius: 999, padding: "7px 10px", fontFamily: "'DM Mono', monospace", fontWeight: 500, fontSize: 11, textTransform: "uppercase", letterSpacing: ".14em" },
+  title: { margin: 0, fontSize: "clamp(44px, 8vw, 92px)", lineHeight: .88, color: "#f7f3ea", letterSpacing: "-0.07em", fontWeight: 900 },
+  subtitle: { margin: "16px 0 0", maxWidth: 740, color: "rgba(247,243,234,.7)", fontWeight: 700, fontSize: 16, lineHeight: 1.45 },
   actions: { display: "flex", gap: 8, flexWrap: "wrap" },
-  primaryButton: { border: "4px solid #19051f", background: "#75ff63", color: "#19051f", boxShadow: "5px 5px 0 #19051f", padding: "10px 14px", fontFamily: "'Black Ops One', system-ui", letterSpacing: ".08em", textTransform: "uppercase", fontWeight: 900, cursor: "pointer", fontSize: 12 },
-  secondaryButton: { border: "4px solid #19051f", background: "#fff236", color: "#19051f", boxShadow: "5px 5px 0 #19051f", padding: "10px 14px", fontFamily: "'Black Ops One', system-ui", letterSpacing: ".08em", textTransform: "uppercase", fontWeight: 900, cursor: "pointer", fontSize: 12 },
-  teamBar: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderTop: "4px solid #19051f", paddingTop: 14, fontFamily: "'Black Ops One', system-ui", color: "#fffaf0", textShadow: "2px 2px 0 #19051f", fontSize: 16 },
+  primaryButton: { border: 0, background: "linear-gradient(135deg, #f5b850, #e55b86)", color: "#11131b", borderRadius: 999, boxShadow: "0 14px 34px rgba(229,91,134,.24)", padding: "10px 15px", fontWeight: 900, cursor: "pointer", fontSize: 12 },
+  secondaryButton: { border: "1px solid rgba(255,255,255,.14)", background: "rgba(255,255,255,.08)", color: "#f7f3ea", borderRadius: 999, padding: "10px 15px", fontWeight: 800, cursor: "pointer", fontSize: 12 },
+  teamBar: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderTop: "1px solid rgba(255,255,255,.12)", paddingTop: 14, fontFamily: "'DM Mono', monospace", color: "rgba(247,243,234,.76)", fontSize: 12 },
   layout: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 300px", gap: 16 },
-  chatPanel: { height: "min(790px, calc(100vh - 96px))", minHeight: 620, border: "5px solid #19051f", background: "#fffaf0", boxShadow: "10px 10px 0 #19051f", overflow: "hidden", display: "flex", flexDirection: "column", transform: "rotate(.35deg)" },
-  chatStatus: { minHeight: 34, display: "flex", alignItems: "center", padding: "0 16px", borderBottom: "4px solid #19051f", background: "#ff4fd8", color: "#fffaf0", textShadow: "1px 1px 0 #19051f", fontFamily: "'DM Mono', monospace", fontSize: 12, fontStyle: "italic", fontWeight: 900 },
-  messageList: { flex: 1, minHeight: 0, overflowY: "auto", padding: 18, display: "flex", flexDirection: "column", gap: 13, overscrollBehavior: "contain", background: "linear-gradient(135deg, rgba(53,244,255,.16) 25%, transparent 25%) 0 0 / 20px 20px, #fffaf0" },
-  locked: { minHeight: 500, display: "grid", placeItems: "center", textAlign: "center", padding: 24, fontFamily: "'Black Ops One', system-ui", color: "#19051f" },
-  emptyChat: { margin: "auto", textAlign: "center", color: "#19051f", fontFamily: "'Black Ops One', system-ui" },
-  message: { maxWidth: "min(650px, 92%)", alignSelf: "flex-start", border: "4px solid #19051f", background: "#35f4ff", boxShadow: "6px 6px 0 #19051f", padding: 12, transform: "rotate(-.35deg)" },
-  messageMine: { alignSelf: "flex-end", background: "#75ff63", transform: "rotate(.35deg)" },
-  messageMeta: { display: "flex", alignItems: "center", gap: 9, color: "#19051f", fontFamily: "'DM Mono', monospace", fontWeight: 900, fontSize: 11, marginBottom: 7, textTransform: "uppercase" },
-  replyPreview: { display: "grid", gap: 3, borderLeft: "6px solid #ff4fd8", background: "#fff236", border: "3px solid #19051f", padding: "7px 9px", marginBottom: 8, color: "#19051f", fontFamily: "'DM Mono', monospace", fontSize: 11, fontWeight: 900 },
-  messageText: { margin: 0, whiteSpace: "pre-wrap", color: "#19051f", lineHeight: 1.55, fontSize: 14, fontFamily: "Inter, system-ui", fontWeight: 800 },
-  deletedText: { margin: 0, color: "rgba(25,5,31,.62)", fontFamily: "'DM Mono', monospace", fontStyle: "italic", fontSize: 13 },
+  chatPanel: { height: "min(790px, calc(100vh - 96px))", minHeight: 620, border: "1px solid rgba(255,255,255,.12)", background: "rgba(255,255,255,.06)", borderRadius: 28, boxShadow: "0 24px 70px rgba(0,0,0,.32)", overflow: "hidden", display: "flex", flexDirection: "column", backdropFilter: "blur(18px)" },
+  chatStatus: { minHeight: 34, display: "flex", alignItems: "center", padding: "0 16px", borderBottom: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.045)", color: "#f5b850", fontFamily: "'DM Mono', monospace", fontSize: 11, fontStyle: "italic" },
+  messageList: { flex: 1, minHeight: 0, overflowY: "auto", padding: 18, display: "flex", flexDirection: "column", gap: 13, overscrollBehavior: "contain", background: "rgba(7,9,14,.18)" },
+  locked: { minHeight: 500, display: "grid", placeItems: "center", textAlign: "center", padding: 24, color: "rgba(247,243,234,.72)" },
+  emptyChat: { margin: "auto", textAlign: "center", color: "rgba(247,243,234,.62)" },
+  message: { maxWidth: "min(650px, 92%)", alignSelf: "flex-start", border: "1px solid rgba(255,255,255,.12)", background: "rgba(255,255,255,.09)", borderRadius: 20, boxShadow: "0 14px 40px rgba(0,0,0,.18)", padding: 13 },
+  messageMine: { alignSelf: "flex-end", background: "linear-gradient(135deg, rgba(245,184,80,.22), rgba(229,91,134,.18))", borderColor: "rgba(245,184,80,.25)" },
+  messageMeta: { display: "flex", alignItems: "center", gap: 9, color: "rgba(247,243,234,.62)", fontFamily: "'DM Mono', monospace", fontSize: 11, marginBottom: 7 },
+  replyPreview: { display: "grid", gap: 3, borderLeft: "3px solid #f5b850", background: "rgba(245,184,80,.09)", borderRadius: 12, padding: "8px 10px", marginBottom: 8, color: "rgba(247,243,234,.72)", fontFamily: "'DM Mono', monospace", fontSize: 11 },
+  messageText: { margin: 0, whiteSpace: "pre-wrap", color: "#f7f3ea", lineHeight: 1.55, fontSize: 14, fontWeight: 650 },
+  deletedText: { margin: 0, color: "rgba(247,243,234,.42)", fontFamily: "'DM Mono', monospace", fontStyle: "italic", fontSize: 13 },
   deleteButton: { marginLeft: "auto", border: 0, background: "transparent", color: "rgba(248,113,113,.8)", cursor: "pointer", fontFamily: "'DM Mono', monospace", fontSize: 10 },
-  media: { display: "block", marginTop: 9, maxWidth: "100%", maxHeight: 360, border: "4px solid #19051f", objectFit: "contain", boxShadow: "5px 5px 0 #19051f" },
+  media: { display: "block", marginTop: 9, maxWidth: "100%", maxHeight: 360, borderRadius: 16, border: "1px solid rgba(255,255,255,.12)", objectFit: "contain" },
   audio: { display: "block", marginTop: 9, width: "min(360px, 100%)", height: 38 },
-  mediaLink: { color: "#19051f", wordBreak: "break-all", fontWeight: 900 },
+  mediaLink: { color: "#f5b850", wordBreak: "break-all", fontWeight: 800 },
   reactionChips: { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 },
-  reactionChip: { border: "3px solid #19051f", background: "#fff236", color: "#19051f", padding: "3px 8px", cursor: "pointer", fontSize: 12, fontWeight: 900 },
-  actionRow: { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10, borderTop: "3px solid rgba(25,5,31,.22)", paddingTop: 8 },
-  actionButton: { border: "3px solid #19051f", background: "#fffaf0", color: "#19051f", padding: "4px 8px", fontFamily: "'DM Mono', monospace", fontWeight: 900, fontSize: 10, cursor: "pointer", textTransform: "uppercase", letterSpacing: ".06em" },
-  actionButtonDanger: { border: "3px solid #19051f", background: "#ff4b4b", color: "#fff", padding: "4px 8px", fontFamily: "'DM Mono', monospace", fontWeight: 900, fontSize: 10, cursor: "pointer", textTransform: "uppercase", letterSpacing: ".06em" },
+  reactionChip: { border: "1px solid rgba(255,255,255,.12)", background: "rgba(255,255,255,.08)", color: "#f7f3ea", borderRadius: 999, padding: "4px 8px", cursor: "pointer", fontSize: 12 },
+  actionRow: { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10, borderTop: "1px solid rgba(255,255,255,.08)", paddingTop: 8 },
+  actionButton: { border: "1px solid rgba(255,255,255,.12)", background: "rgba(255,255,255,.06)", color: "rgba(247,243,234,.72)", borderRadius: 999, padding: "5px 9px", fontFamily: "'DM Mono', monospace", fontSize: 10, cursor: "pointer", textTransform: "uppercase", letterSpacing: ".06em" },
+  actionButtonDanger: { border: "1px solid rgba(229,91,134,.25)", background: "rgba(229,91,134,.11)", color: "#ffd5df", borderRadius: 999, padding: "5px 9px", fontFamily: "'DM Mono', monospace", fontSize: 10, cursor: "pointer", textTransform: "uppercase", letterSpacing: ".06em" },
   reactRow: { display: "flex", gap: 5, flexWrap: "wrap", marginTop: 8 },
-  reactButton: { width: 30, height: 30, border: "3px solid #19051f", background: "#ff4fd8", cursor: "pointer", display: "grid", placeItems: "center" },
-  composer: { borderTop: "5px solid #19051f", padding: 12, background: "#ff4fd8" },
-  composerContext: { display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", border: "4px solid #19051f", background: "#fff236", padding: "8px 10px", marginBottom: 9, fontFamily: "'DM Mono', monospace", color: "#19051f", fontWeight: 900, fontSize: 11 },
-  contextClose: { border: "3px solid #19051f", background: "#fffaf0", color: "#19051f", cursor: "pointer", fontFamily: "'DM Mono', monospace", fontWeight: 900, fontSize: 11, textTransform: "uppercase" },
+  reactButton: { width: 30, height: 30, border: "1px solid rgba(255,255,255,.12)", background: "rgba(255,255,255,.07)", borderRadius: 999, cursor: "pointer", display: "grid", placeItems: "center" },
+  composer: { borderTop: "1px solid rgba(255,255,255,.1)", padding: 12, background: "rgba(7,9,14,.45)" },
+  composerContext: { display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", borderLeft: "3px solid #f5b850", background: "rgba(245,184,80,.09)", borderRadius: 14, padding: "8px 10px", marginBottom: 9, fontFamily: "'DM Mono', monospace", color: "rgba(247,243,234,.74)", fontSize: 11 },
+  contextClose: { border: 0, background: "transparent", color: "#f5b850", cursor: "pointer", fontFamily: "'DM Mono', monospace", fontSize: 11, textTransform: "uppercase" },
   kindTabs: { display: "flex", gap: 5, marginBottom: 9 },
-  kindTab: { border: "3px solid #19051f", background: "#fffaf0", color: "#19051f", padding: "6px 9px", textTransform: "uppercase", fontFamily: "'DM Mono', monospace", fontWeight: 900, fontSize: 10, cursor: "pointer" },
-  kindActive: { color: "#19051f", background: "#75ff63", boxShadow: "3px 3px 0 #19051f" },
-  mediaInput: { width: "100%", marginBottom: 8, border: "4px solid #19051f", background: "#fffaf0", color: "#19051f", padding: "10px 11px", fontFamily: "'DM Mono', monospace", fontWeight: 900 },
+  kindTab: { border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.055)", color: "rgba(247,243,234,.6)", borderRadius: 999, padding: "7px 10px", textTransform: "uppercase", fontFamily: "'DM Mono', monospace", fontSize: 10, cursor: "pointer" },
+  kindActive: { color: "#11131b", background: "#f5b850" },
+  mediaInput: { width: "100%", marginBottom: 8, border: "1px solid rgba(255,255,255,.12)", background: "rgba(255,255,255,.06)", color: "#f7f3ea", borderRadius: 16, padding: "11px 12px", fontFamily: "'DM Mono', monospace" },
   composerRow: { display: "flex", gap: 9, alignItems: "stretch" },
-  messageInput: { flex: 1, resize: "none", border: "4px solid #19051f", background: "#fffaf0", color: "#19051f", padding: 11, fontFamily: "'DM Mono', monospace", fontWeight: 900 },
-  sendButton: { width: 96, border: "4px solid #19051f", background: "#75ff63", color: "#19051f", boxShadow: "4px 4px 0 #19051f", fontFamily: "'Black Ops One', system-ui", letterSpacing: ".08em", textTransform: "uppercase", fontWeight: 900, cursor: "pointer" },
+  messageInput: { flex: 1, resize: "none", border: "1px solid rgba(255,255,255,.12)", background: "rgba(255,255,255,.06)", color: "#f7f3ea", borderRadius: 18, padding: 12, fontFamily: "'DM Mono', monospace" },
+  sendButton: { width: 96, border: 0, borderRadius: 18, background: "linear-gradient(135deg, #f5b850, #e55b86)", color: "#11131b", fontWeight: 900, cursor: "pointer" },
   sidebar: { display: "flex", flexDirection: "column", gap: 16 },
-  voicePanel: { border: "5px solid #19051f", background: "#35f4ff", boxShadow: "8px 8px 0 #19051f", padding: 14, transform: "rotate(-1deg)" },
-  voiceCopy: { margin: "-6px 0 12px", color: "#19051f", fontFamily: "'DM Mono', monospace", fontWeight: 900, fontSize: 12, lineHeight: 1.5 },
+  voicePanel: { border: "1px solid rgba(255,255,255,.12)", background: "linear-gradient(180deg, rgba(81,196,184,.11), rgba(255,255,255,.045))", borderRadius: 24, boxShadow: "0 18px 50px rgba(0,0,0,.24)", padding: 14, backdropFilter: "blur(18px)" },
+  voiceCopy: { margin: "-6px 0 12px", color: "rgba(247,243,234,.62)", fontFamily: "'DM Mono', monospace", fontSize: 12, lineHeight: 1.5 },
   voiceActions: { display: "flex", gap: 8, flexWrap: "wrap" },
   voicePeople: { display: "flex", flexDirection: "column", gap: 6, marginTop: 12 },
-  voicePerson: { color: "#19051f", fontFamily: "'DM Mono', monospace", fontWeight: 900, fontSize: 11, border: "3px solid #19051f", padding: "6px 8px", background: "#fff236" },
-  sideSection: { border: "5px solid #19051f", background: "#fffaf0", boxShadow: "8px 8px 0 #19051f", padding: 14, transform: "rotate(1deg)" },
-  sideTitle: { margin: "0 0 12px", fontFamily: "'Bangers', cursive", fontSize: 34, fontWeight: 400, letterSpacing: ".02em" },
+  voicePerson: { color: "rgba(247,243,234,.72)", fontFamily: "'DM Mono', monospace", fontSize: 11, border: "1px solid rgba(255,255,255,.1)", borderRadius: 12, padding: "6px 8px", background: "rgba(255,255,255,.055)" },
+  sideSection: { border: "1px solid rgba(255,255,255,.12)", background: "rgba(255,255,255,.06)", borderRadius: 24, boxShadow: "0 18px 50px rgba(0,0,0,.24)", padding: 14, backdropFilter: "blur(18px)" },
+  sideTitle: { margin: "0 0 12px", fontSize: 22, fontWeight: 900, letterSpacing: "-0.04em" },
   memberList: { display: "flex", flexDirection: "column", gap: 9 },
-  member: { color: "#19051f", textDecoration: "none", display: "grid", gridTemplateColumns: "30px 1fr auto", alignItems: "center", gap: 8, fontFamily: "'DM Mono', monospace", fontWeight: 900, fontSize: 12 },
-  avatar: { width: 30, height: 30, display: "grid", placeItems: "center", background: "#ff4fd8", border: "3px solid #19051f", color: "#fffaf0", fontWeight: 900 },
-  codeInput: { width: "100%", marginTop: 9, border: "4px solid #19051f", background: "#fffaf0", color: "#19051f", padding: "10px 11px", fontFamily: "'DM Mono', monospace", fontWeight: 900 },
+  member: { color: "rgba(247,243,234,.78)", textDecoration: "none", display: "grid", gridTemplateColumns: "30px 1fr auto", alignItems: "center", gap: 8, fontFamily: "'DM Mono', monospace", fontSize: 12 },
+  avatar: { width: 30, height: 30, borderRadius: "50%", display: "grid", placeItems: "center", background: "linear-gradient(135deg, #f5b850, #e55b86)", color: "#11131b", fontWeight: 900 },
+  codeInput: { width: "100%", marginTop: 9, border: "1px solid rgba(255,255,255,.12)", background: "rgba(255,255,255,.06)", color: "#f7f3ea", borderRadius: 16, padding: "10px 11px", fontFamily: "'DM Mono', monospace" },
   inviteForm: { marginTop: 10, display: "grid", gap: 9 },
-  error: { border: "5px solid #19051f", background: "#ff4b4b", color: "#fff", boxShadow: "8px 8px 0 #19051f", padding: 12, marginBottom: 16, fontFamily: "'Black Ops One', system-ui", fontSize: 12 },
+  error: { border: "1px solid rgba(229,91,134,.35)", background: "rgba(229,91,134,.12)", color: "#ffd5df", borderRadius: 18, padding: 12, marginBottom: 16, fontSize: 12 },
 };
 
 export default SpaceRoom;
