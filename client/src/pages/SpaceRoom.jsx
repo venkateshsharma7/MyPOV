@@ -2,14 +2,22 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   deleteSpaceMessage,
+  editSpaceMessage,
   getInviteCode,
   getSpace,
   getSpaceMessages,
   inviteUsers,
+  joinVoiceRoom,
   joinSpace,
+  leaveVoiceRoom,
   leaveSpace,
+  muteVoiceRoom,
+  reactToSpaceMessage,
   sendSpaceMessage,
+  starSpaceMessage,
 } from "../api/spaces";
+
+const REACTIONS = ["🔥", "😂", "❤️", "👏", "😮", "👎"];
 
 function SpaceRoom() {
   const { id } = useParams();
@@ -28,6 +36,9 @@ function SpaceRoom() {
   const [text, setText] = useState("");
   const [kind, setKind] = useState("text");
   const [mediaUrl, setMediaUrl] = useState("");
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [editingMessage, setEditingMessage] = useState(null);
+  const [voiceMuted, setVoiceMuted] = useState(false);
   const [inviteCode, setInviteCode] = useState("");
   const [inviteNames, setInviteNames] = useState("");
   const [sending, setSending] = useState(false);
@@ -42,6 +53,7 @@ function SpaceRoom() {
     if (!space?.viewer?.isMember) return undefined;
     const timer = setInterval(() => {
       loadMessages(latestMessageRef.current, false);
+      refreshSpaceQuietly();
     }, 3500);
     return () => clearInterval(timer);
   }, [space?._id, space?.viewer?.isMember]);
@@ -82,6 +94,15 @@ function SpaceRoom() {
     }
   }
 
+  async function refreshSpaceQuietly() {
+    try {
+      const data = await getSpace(id);
+      setSpace(data);
+    } catch {
+      // Polling refreshes should not interrupt chat.
+    }
+  }
+
   async function handleJoin() {
     try {
       const joined = await joinSpace(id);
@@ -106,19 +127,85 @@ function SpaceRoom() {
     try {
       setSending(true);
       setError("");
-      const message = await sendSpaceMessage(id, {
-        text,
-        kind,
-        mediaUrl: kind === "text" ? "" : mediaUrl,
-      });
-      setMessages((prev) => [...prev, message]);
+      const trimmedText = text.trim();
+      let message;
+      if (editingMessage) {
+        message = await editSpaceMessage(id, editingMessage._id, trimmedText);
+        setMessages((prev) => prev.map((item) => (item._id === message._id ? message : item)));
+      } else {
+        message = await sendSpaceMessage(id, {
+          text: trimmedText,
+          kind,
+          mediaUrl: kind === "text" ? "" : mediaUrl.trim(),
+          replyTo: replyingTo?._id || null,
+        });
+        setMessages((prev) => [...prev, message]);
+      }
       setText("");
       setMediaUrl("");
       setKind("text");
+      setReplyingTo(null);
+      setEditingMessage(null);
     } catch (err) {
       setError(err.message || "Could not send message");
     } finally {
       setSending(false);
+    }
+  }
+
+  function beginEdit(message) {
+    setEditingMessage(message);
+    setReplyingTo(null);
+    setKind("text");
+    setMediaUrl("");
+    setText(message.text || "");
+  }
+
+  async function handleReact(messageId, emoji) {
+    try {
+      const updated = await reactToSpaceMessage(id, messageId, emoji);
+      setMessages((prev) => prev.map((message) => (message._id === updated._id ? updated : message)));
+    } catch (err) {
+      setError(err.message || "Could not react");
+    }
+  }
+
+  async function handleStar(messageId) {
+    try {
+      const updated = await starSpaceMessage(id, messageId);
+      setMessages((prev) => prev.map((message) => (message._id === updated._id ? updated : message)));
+    } catch (err) {
+      setError(err.message || "Could not star message");
+    }
+  }
+
+  async function handleVoiceJoin() {
+    try {
+      const updated = await joinVoiceRoom(id);
+      setSpace(updated);
+    } catch (err) {
+      setError(err.message || "Could not join voice chat");
+    }
+  }
+
+  async function handleVoiceLeave() {
+    try {
+      const updated = await leaveVoiceRoom(id);
+      setSpace(updated);
+      setVoiceMuted(false);
+    } catch (err) {
+      setError(err.message || "Could not leave voice chat");
+    }
+  }
+
+  async function handleVoiceMute() {
+    try {
+      const muted = !voiceMuted;
+      const updated = await muteVoiceRoom(id, muted);
+      setVoiceMuted(muted);
+      setSpace(updated);
+    } catch (err) {
+      setError(err.message || "Could not update voice chat");
     }
   }
 
@@ -149,7 +236,11 @@ function SpaceRoom() {
   async function handleDelete(messageId) {
     try {
       await deleteSpaceMessage(id, messageId);
-      setMessages((prev) => prev.filter((message) => message._id !== messageId));
+      setMessages((prev) =>
+        prev.map((message) =>
+          message._id === messageId ? { ...message, text: "", mediaUrl: "", deletedAt: new Date().toISOString() } : message
+        )
+      );
     } catch (err) {
       setError(err.message || "Could not delete message");
     }
@@ -179,6 +270,7 @@ function SpaceRoom() {
   const canChat = space?.viewer?.isMember;
   const canModerate = space?.viewer?.canModerate;
   const canLeave = canChat && space?.viewer?.role !== "owner";
+  const viewerInVoice = Boolean(space?.voiceRoom?.viewerInVoice);
 
   return (
     <main style={styles.page}>
@@ -234,6 +326,15 @@ function SpaceRoom() {
                         message={message}
                         mine={message.user?.username === user?.username}
                         canDelete={canModerate || message.user?.username === user?.username}
+                        canEdit={message.user?.username === user?.username && message.kind === "text" && !message.deletedAt}
+                        viewerUsername={user?.username}
+                        onReply={() => {
+                          setReplyingTo(message);
+                          setEditingMessage(null);
+                        }}
+                        onEdit={() => beginEdit(message)}
+                        onReact={(emoji) => handleReact(message._id, emoji)}
+                        onStar={() => handleStar(message._id)}
                         onDelete={() => handleDelete(message._id)}
                       />
                     ))
@@ -242,8 +343,27 @@ function SpaceRoom() {
                 </div>
 
                 <form onSubmit={handleSend} style={styles.composer}>
+                  {(replyingTo || editingMessage) && (
+                    <div style={styles.composerContext}>
+                      <div>
+                        <strong>{editingMessage ? "Editing message" : `Replying to @${replyingTo?.user?.username || "user"}`}</strong>
+                        <p>{editingMessage ? editingMessage.text : summarizeMessage(replyingTo)}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReplyingTo(null);
+                          setEditingMessage(null);
+                          setText("");
+                        }}
+                        style={styles.contextClose}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  )}
                   <div style={styles.kindTabs}>
-                    {["text", "image", "gif"].map((option) => (
+                    {["text", "image", "gif", "voice"].map((option) => (
                       <button
                         key={option}
                         type="button"
@@ -258,7 +378,7 @@ function SpaceRoom() {
                     <input
                       value={mediaUrl}
                       onChange={(event) => setMediaUrl(event.target.value)}
-                      placeholder={kind === "gif" ? "Paste GIF URL" : "Paste image URL"}
+                      placeholder={kind === "gif" ? "Paste GIF URL" : kind === "voice" ? "Paste voice note/audio URL" : "Paste image URL"}
                       style={styles.mediaInput}
                     />
                   )}
@@ -272,7 +392,7 @@ function SpaceRoom() {
                       style={styles.messageInput}
                     />
                     <button type="submit" disabled={sending || (!text.trim() && !mediaUrl.trim())} style={styles.sendButton}>
-                      {sending ? "..." : "Send"}
+                      {sending ? "..." : editingMessage ? "Save" : "Send"}
                     </button>
                   </div>
                 </form>
@@ -281,6 +401,44 @@ function SpaceRoom() {
           </section>
 
           <aside className="space-sidebar" style={styles.sidebar}>
+            {canChat && (
+              <section style={styles.voicePanel}>
+                <div>
+                  <h2 style={styles.sideTitle}>Voice Chat</h2>
+                  <p style={styles.voiceCopy}>
+                    {space.voiceRoom?.active
+                      ? `${space.voiceRoom.participantCount} live in voice`
+                      : "Start a live fan-war voice room."}
+                  </p>
+                </div>
+                <div style={styles.voiceActions}>
+                  {viewerInVoice ? (
+                    <>
+                      <button type="button" style={styles.secondaryButton} onClick={handleVoiceMute}>
+                        {voiceMuted ? "Unmute" : "Mute"}
+                      </button>
+                      <button type="button" style={styles.secondaryButton} onClick={handleVoiceLeave}>
+                        Leave
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" style={styles.primaryButton} onClick={handleVoiceJoin}>
+                      Join Voice
+                    </button>
+                  )}
+                </div>
+                {space.voiceRoom?.participants?.length > 0 && (
+                  <div style={styles.voicePeople}>
+                    {space.voiceRoom.participants.map((participant) => (
+                      <span key={participant.user?._id || participant.user} style={styles.voicePerson}>
+                        @{participant.user?.username || "user"} {participant.muted ? "muted" : "live"}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
             <section style={styles.sideSection}>
               <h2 style={styles.sideTitle}>Members</h2>
               <div style={styles.memberList}>
@@ -317,24 +475,94 @@ function SpaceRoom() {
   );
 }
 
-function MessageBubble({ message, mine, canDelete, onDelete }) {
+function MessageBubble({
+  message,
+  mine,
+  canDelete,
+  canEdit,
+  viewerUsername,
+  onReply,
+  onEdit,
+  onReact,
+  onStar,
+  onDelete,
+}) {
+  const reactionGroups = groupReactions(message.reactions || []);
+  const starred = (message.starredBy || []).some((user) => user?.username === viewerUsername);
+  const deleted = Boolean(message.deletedAt);
+
   return (
     <article style={{ ...styles.message, ...(mine ? styles.messageMine : {}) }}>
       <div style={styles.messageMeta}>
         <strong>@{message.user?.username || "user"}</strong>
         <span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-        {canDelete && <button type="button" onClick={onDelete} style={styles.deleteButton}>Delete</button>}
+        {message.editedAt && !deleted && <span>edited</span>}
+        {starred && <span>starred</span>}
       </div>
-      {message.text && <p style={styles.messageText}>{message.text}</p>}
-      {message.mediaUrl && (
-        message.kind === "gif" || message.kind === "image" ? (
-          <img src={message.mediaUrl} alt={message.kind} style={styles.media} loading="lazy" />
-        ) : (
-          <a href={message.mediaUrl} target="_blank" rel="noreferrer" style={styles.mediaLink}>{message.mediaUrl}</a>
-        )
+      {message.replyTo && !deleted && (
+        <div style={styles.replyPreview}>
+          <strong>@{message.replyTo.user?.username || "user"}</strong>
+          <span>{summarizeMessage(message.replyTo)}</span>
+        </div>
+      )}
+      {deleted ? (
+        <p style={styles.deletedText}>This message was deleted</p>
+      ) : (
+        <>
+          {message.text && <p style={styles.messageText}>{message.text}</p>}
+          {message.mediaUrl && (
+            message.kind === "gif" || message.kind === "image" ? (
+              <img src={message.mediaUrl} alt={message.kind} style={styles.media} loading="lazy" />
+            ) : message.kind === "voice" ? (
+              <audio controls src={message.mediaUrl} style={styles.audio} />
+            ) : (
+              <a href={message.mediaUrl} target="_blank" rel="noreferrer" style={styles.mediaLink}>{message.mediaUrl}</a>
+            )
+          )}
+          {reactionGroups.length > 0 && (
+            <div style={styles.reactionChips}>
+              {reactionGroups.map((reaction) => (
+                <button key={reaction.emoji} type="button" onClick={() => onReact(reaction.emoji)} style={styles.reactionChip}>
+                  {reaction.emoji} {reaction.count}
+                </button>
+              ))}
+            </div>
+          )}
+          <div style={styles.actionRow}>
+            <button type="button" onClick={onReply} style={styles.actionButton}>Reply</button>
+            {canEdit && <button type="button" onClick={onEdit} style={styles.actionButton}>Edit</button>}
+            <button type="button" onClick={onStar} style={styles.actionButton}>{starred ? "Unstar" : "Star"}</button>
+            {canDelete && <button type="button" onClick={onDelete} style={styles.actionButtonDanger}>Delete</button>}
+          </div>
+          <div style={styles.reactRow}>
+            {REACTIONS.map((emoji) => (
+              <button key={emoji} type="button" onClick={() => onReact(emoji)} style={styles.reactButton}>
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </>
       )}
     </article>
   );
+}
+
+function summarizeMessage(message) {
+  if (!message) return "";
+  if (message.deletedAt) return "Deleted message";
+  if (message.text) return message.text.length > 90 ? `${message.text.slice(0, 90)}...` : message.text;
+  if (message.kind === "voice") return "Voice note";
+  if (message.kind === "gif") return "GIF";
+  if (message.kind === "image") return "Image";
+  return "Message";
+}
+
+function groupReactions(reactions) {
+  const map = new Map();
+  reactions.forEach((reaction) => {
+    map.set(reaction.emoji, (map.get(reaction.emoji) || 0) + 1);
+  });
+  return Array.from(map.entries()).map(([emoji, count]) => ({ emoji, count }));
 }
 
 const globalStyles = `
@@ -385,11 +613,23 @@ const styles = {
   message: { maxWidth: "min(620px, 92%)", alignSelf: "flex-start", border: "1px solid rgba(212,175,55,.16)", background: "rgba(7,6,10,.7)", borderRadius: 8, padding: 12 },
   messageMine: { alignSelf: "flex-end", background: "rgba(212,175,55,.12)", borderColor: "rgba(212,175,55,.32)" },
   messageMeta: { display: "flex", alignItems: "center", gap: 9, color: "rgba(212,175,55,.75)", fontFamily: "'DM Mono', monospace", fontSize: 11, marginBottom: 7 },
+  replyPreview: { display: "grid", gap: 3, borderLeft: "3px solid rgba(212,175,55,.65)", background: "rgba(212,175,55,.08)", borderRadius: 6, padding: "7px 9px", marginBottom: 8, color: "rgba(245,240,232,.72)", fontFamily: "'DM Mono', monospace", fontSize: 11 },
   messageText: { margin: 0, whiteSpace: "pre-wrap", color: "#f5f0e8", lineHeight: 1.55, fontSize: 14 },
+  deletedText: { margin: 0, color: "rgba(245,240,232,.45)", fontFamily: "'DM Mono', monospace", fontStyle: "italic", fontSize: 13 },
   deleteButton: { marginLeft: "auto", border: 0, background: "transparent", color: "rgba(248,113,113,.8)", cursor: "pointer", fontFamily: "'DM Mono', monospace", fontSize: 10 },
   media: { display: "block", marginTop: 9, maxWidth: "100%", maxHeight: 360, borderRadius: 7, border: "1px solid rgba(255,255,255,.12)", objectFit: "contain" },
+  audio: { display: "block", marginTop: 9, width: "min(360px, 100%)", height: 38 },
   mediaLink: { color: "#d4af37", wordBreak: "break-all" },
+  reactionChips: { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 },
+  reactionChip: { border: "1px solid rgba(212,175,55,.2)", background: "rgba(255,255,255,.05)", color: "#f5f0e8", borderRadius: 999, padding: "3px 8px", cursor: "pointer", fontSize: 12 },
+  actionRow: { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10, borderTop: "1px solid rgba(212,175,55,.1)", paddingTop: 8 },
+  actionButton: { border: "1px solid rgba(212,175,55,.18)", background: "transparent", color: "rgba(212,175,55,.8)", borderRadius: 6, padding: "4px 8px", fontFamily: "'DM Mono', monospace", fontSize: 10, cursor: "pointer", textTransform: "uppercase", letterSpacing: ".06em" },
+  actionButtonDanger: { border: "1px solid rgba(248,113,113,.24)", background: "transparent", color: "rgba(248,113,113,.86)", borderRadius: 6, padding: "4px 8px", fontFamily: "'DM Mono', monospace", fontSize: 10, cursor: "pointer", textTransform: "uppercase", letterSpacing: ".06em" },
+  reactRow: { display: "flex", gap: 5, flexWrap: "wrap", marginTop: 8 },
+  reactButton: { width: 28, height: 28, border: "1px solid rgba(212,175,55,.16)", background: "rgba(7,6,10,.5)", borderRadius: 999, cursor: "pointer", display: "grid", placeItems: "center" },
   composer: { borderTop: "1px solid rgba(212,175,55,.14)", padding: 12, background: "rgba(7,6,10,.72)" },
+  composerContext: { display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", borderLeft: "3px solid #d4af37", background: "rgba(212,175,55,.09)", borderRadius: 7, padding: "8px 10px", marginBottom: 9, fontFamily: "'DM Mono', monospace", color: "rgba(245,240,232,.76)", fontSize: 11 },
+  contextClose: { border: 0, background: "transparent", color: "#d4af37", cursor: "pointer", fontFamily: "'DM Mono', monospace", fontSize: 11, textTransform: "uppercase" },
   kindTabs: { display: "flex", gap: 5, marginBottom: 9 },
   kindTab: { border: "1px solid rgba(212,175,55,.16)", background: "transparent", color: "rgba(245,240,232,.62)", borderRadius: 6, padding: "6px 9px", textTransform: "uppercase", fontFamily: "'DM Mono', monospace", fontSize: 10, cursor: "pointer" },
   kindActive: { color: "#d4af37", background: "rgba(212,175,55,.12)", borderColor: "rgba(212,175,55,.34)" },
@@ -398,6 +638,11 @@ const styles = {
   messageInput: { flex: 1, resize: "none", border: "1px solid rgba(212,175,55,.2)", background: "rgba(255,255,255,.04)", color: "#f5f0e8", borderRadius: 7, padding: 11, fontFamily: "'DM Mono', monospace" },
   sendButton: { width: 92, border: "1px solid rgba(212,175,55,.5)", background: "#d4af37", color: "#09070a", borderRadius: 7, fontFamily: "'Cinzel', serif", letterSpacing: ".12em", textTransform: "uppercase", fontWeight: 700, cursor: "pointer" },
   sidebar: { display: "flex", flexDirection: "column", gap: 16 },
+  voicePanel: { border: "1px solid rgba(95,176,160,.26)", background: "linear-gradient(135deg, rgba(95,176,160,.11), rgba(212,175,55,.06))", borderRadius: 8, padding: 14 },
+  voiceCopy: { margin: "-6px 0 12px", color: "rgba(245,240,232,.64)", fontFamily: "'DM Mono', monospace", fontSize: 12, lineHeight: 1.5 },
+  voiceActions: { display: "flex", gap: 8, flexWrap: "wrap" },
+  voicePeople: { display: "flex", flexDirection: "column", gap: 6, marginTop: 12 },
+  voicePerson: { color: "rgba(245,240,232,.72)", fontFamily: "'DM Mono', monospace", fontSize: 11, border: "1px solid rgba(255,255,255,.1)", borderRadius: 6, padding: "6px 8px", background: "rgba(7,6,10,.35)" },
   sideSection: { border: "1px solid rgba(212,175,55,.16)", background: "rgba(255,255,255,.035)", borderRadius: 8, padding: 14 },
   sideTitle: { margin: "0 0 12px", fontFamily: "'Cormorant Garamond', serif", fontSize: 24, fontWeight: 600 },
   memberList: { display: "flex", flexDirection: "column", gap: 9 },

@@ -40,6 +40,25 @@ const spaceInviteSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const voiceParticipantSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    muted: {
+      type: Boolean,
+      default: false,
+    },
+    joinedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false }
+);
+
 const spaceSchema = new mongoose.Schema(
   {
     name: {
@@ -106,6 +125,25 @@ const spaceSchema = new mongoose.Schema(
       type: Date,
       default: null,
       index: true,
+    },
+    voiceRoom: {
+      active: {
+        type: Boolean,
+        default: false,
+      },
+      startedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+      },
+      startedAt: {
+        type: Date,
+        default: null,
+      },
+      participants: {
+        type: [voiceParticipantSchema],
+        default: [],
+      },
     },
   },
   { timestamps: true }

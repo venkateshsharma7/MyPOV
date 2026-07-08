@@ -38,7 +38,7 @@ const spaceMessageSchema = new mongoose.Schema(
     },
     kind: {
       type: String,
-      enum: ["text", "image", "gif"],
+      enum: ["text", "image", "gif", "voice"],
       default: "text",
     },
     mediaUrl: {
@@ -47,9 +47,33 @@ const spaceMessageSchema = new mongoose.Schema(
       maxlength: 1000,
       default: "",
     },
+    replyTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "SpaceMessage",
+      default: null,
+    },
     reactions: {
       type: [messageReactionSchema],
       default: [],
+    },
+    starredBy: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    editedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
     },
   },
   { timestamps: true }

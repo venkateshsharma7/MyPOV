@@ -43,6 +43,7 @@ function canViewSpace(space, userId) {
 function publicSpacePayload(space, userId) {
   const members = Array.isArray(space.members) ? space.members : [];
   const role = memberRole(space, userId);
+  const voiceParticipants = Array.isArray(space.voiceRoom?.participants) ? space.voiceRoom.participants : [];
   return {
     _id: space._id,
     name: space.name,
@@ -56,6 +57,14 @@ function publicSpacePayload(space, userId) {
     teamA: space.teamA,
     teamB: space.teamB,
     lastMessageAt: space.lastMessageAt,
+    voiceRoom: {
+      active: Boolean(space.voiceRoom?.active),
+      startedBy: space.voiceRoom?.startedBy || null,
+      startedAt: space.voiceRoom?.startedAt || null,
+      participants: voiceParticipants,
+      participantCount: voiceParticipants.length,
+      viewerInVoice: voiceParticipants.some((participant) => String(participant.user?._id || participant.user) === userId),
+    },
     createdAt: space.createdAt,
     updatedAt: space.updatedAt,
     viewer: {
@@ -81,6 +90,8 @@ async function loadSpaceForViewer(spaceId, userId) {
     .populate("owner", "username")
     .populate("members.user", "username")
     .populate("invitedUsers.user", "username")
+    .populate("voiceRoom.startedBy", "username")
+    .populate("voiceRoom.participants.user", "username")
     .lean();
 
   if (!space || !canViewSpace(space, userId)) return null;
@@ -301,6 +312,10 @@ router.get(
 
       const messages = await SpaceMessage.find(queryFilter)
         .populate("user", "username")
+        .populate("replyTo", "text kind mediaUrl user deletedAt")
+        .populate("replyTo.user", "username")
+        .populate("reactions.user", "username")
+        .populate("starredBy", "username")
         .sort({ createdAt: -1 })
         .limit(80)
         .lean();
@@ -319,8 +334,9 @@ router.post(
   [
     param("id").isMongoId(),
     body("text").optional().isString().trim().isLength({ max: 2000 }),
-    body("kind").optional().isIn(["text", "image", "gif"]),
+    body("kind").optional().isIn(["text", "image", "gif", "voice"]),
     body("mediaUrl").optional().isString().trim().isLength({ max: 1000 }),
+    body("replyTo").optional({ nullable: true, checkFalsy: true }).isMongoId(),
   ],
   validate,
   async (req, res) => {
@@ -331,8 +347,13 @@ router.post(
       const text = String(req.body.text || "").trim();
       const kind = req.body.kind || "text";
       const mediaUrl = String(req.body.mediaUrl || "").trim();
+      const replyTo = req.body.replyTo || null;
       if (!text && !mediaUrl) return res.status(400).json({ error: "Message cannot be empty" });
       if (kind !== "text" && !mediaUrl) return res.status(400).json({ error: "Media URL is required" });
+      if (replyTo) {
+        const repliedMessage = await SpaceMessage.exists({ _id: replyTo, space: space._id });
+        if (!repliedMessage) return res.status(400).json({ error: "Reply target not found" });
+      }
 
       const message = await SpaceMessage.create({
         space: space._id,
@@ -340,12 +361,19 @@ router.post(
         text,
         kind,
         mediaUrl,
+        replyTo,
       });
 
       space.lastMessageAt = new Date();
       await space.save();
 
-      const populated = await SpaceMessage.findById(message._id).populate("user", "username").lean();
+      const populated = await SpaceMessage.findById(message._id)
+        .populate("user", "username")
+        .populate("replyTo", "text kind mediaUrl user deletedAt")
+        .populate("replyTo.user", "username")
+        .populate("reactions.user", "username")
+        .populate("starredBy", "username")
+        .lean();
       res.status(201).json(populated);
     } catch (err) {
       console.error("Space message failed:", err);
@@ -353,6 +381,108 @@ router.post(
     }
   }
 );
+
+router.patch("/:id/messages/:messageId", auth, actionLimiter, [
+  param("id").isMongoId(),
+  param("messageId").isMongoId(),
+  body("text").isString().trim().isLength({ min: 1, max: 2000 }),
+], validate, async (req, res) => {
+  try {
+    const space = await Space.findById(req.params.id).lean();
+    if (!space || !isMember(space, req.user.id)) return res.status(404).json({ error: "Space not found" });
+
+    const message = await SpaceMessage.findOne({
+      _id: req.params.messageId,
+      space: space._id,
+      user: req.user.id,
+      deletedAt: null,
+    });
+    if (!message) return res.status(404).json({ error: "Message not found" });
+    if (message.kind !== "text") return res.status(400).json({ error: "Only text messages can be edited" });
+
+    message.text = req.body.text.trim();
+    message.editedAt = new Date();
+    await message.save();
+
+    const populated = await SpaceMessage.findById(message._id)
+      .populate("user", "username")
+      .populate("replyTo", "text kind mediaUrl user deletedAt")
+      .populate("replyTo.user", "username")
+      .populate("reactions.user", "username")
+      .populate("starredBy", "username")
+      .lean();
+    res.json(populated);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to edit message" });
+  }
+});
+
+router.post("/:id/messages/:messageId/react", auth, actionLimiter, [
+  param("id").isMongoId(),
+  param("messageId").isMongoId(),
+  body("emoji").isString().trim().isLength({ min: 1, max: 16 }),
+], validate, async (req, res) => {
+  try {
+    const space = await Space.findById(req.params.id).lean();
+    if (!space || !isMember(space, req.user.id)) return res.status(404).json({ error: "Space not found" });
+
+    const message = await SpaceMessage.findOne({ _id: req.params.messageId, space: space._id, deletedAt: null });
+    if (!message) return res.status(404).json({ error: "Message not found" });
+
+    const emoji = req.body.emoji.trim();
+    const existing = message.reactions.find((reaction) => String(reaction.user) === req.user.id && reaction.emoji === emoji);
+    if (existing) {
+      message.reactions = message.reactions.filter(
+        (reaction) => !(String(reaction.user) === req.user.id && reaction.emoji === emoji)
+      );
+    } else {
+      message.reactions = message.reactions.filter((reaction) => String(reaction.user) !== req.user.id);
+      message.reactions.push({ user: req.user.id, emoji });
+    }
+    await message.save();
+
+    const populated = await SpaceMessage.findById(message._id)
+      .populate("user", "username")
+      .populate("replyTo", "text kind mediaUrl user deletedAt")
+      .populate("replyTo.user", "username")
+      .populate("reactions.user", "username")
+      .populate("starredBy", "username")
+      .lean();
+    res.json(populated);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to react to message" });
+  }
+});
+
+router.post("/:id/messages/:messageId/star", auth, actionLimiter, [
+  param("id").isMongoId(),
+  param("messageId").isMongoId(),
+], validate, async (req, res) => {
+  try {
+    const space = await Space.findById(req.params.id).lean();
+    if (!space || !isMember(space, req.user.id)) return res.status(404).json({ error: "Space not found" });
+
+    const message = await SpaceMessage.findOne({ _id: req.params.messageId, space: space._id, deletedAt: null });
+    if (!message) return res.status(404).json({ error: "Message not found" });
+
+    const alreadyStarred = message.starredBy.some((userId) => String(userId) === req.user.id);
+    message.starredBy = alreadyStarred
+      ? message.starredBy.filter((userId) => String(userId) !== req.user.id)
+      : [...message.starredBy, req.user.id];
+    await message.save();
+
+    const populated = await SpaceMessage.findById(message._id)
+      .populate("user", "username")
+      .populate("replyTo", "text kind mediaUrl user deletedAt")
+      .populate("replyTo.user", "username")
+      .populate("reactions.user", "username")
+      .populate("starredBy", "username")
+      .lean();
+    res.json(populated);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to star message" });
+  }
+});
 
 router.delete("/:id/messages/:messageId", auth, actionLimiter, [
   param("id").isMongoId(),
@@ -368,10 +498,77 @@ router.delete("/:id/messages/:messageId", auth, actionLimiter, [
     const canDelete = String(message.user) === req.user.id || canModerate(space, req.user.id);
     if (!canDelete) return res.status(403).json({ error: "Cannot delete this message" });
 
-    await message.deleteOne();
-    res.json({ deleted: true });
+    message.text = "";
+    message.mediaUrl = "";
+    message.deletedAt = new Date();
+    message.deletedBy = req.user.id;
+    await message.save();
+    res.json({ deleted: true, messageId: message._id });
   } catch (err) {
     res.status(500).json({ error: "Failed to delete message" });
+  }
+});
+
+router.post("/:id/voice-room/join", auth, actionLimiter, [param("id").isMongoId()], validate, async (req, res) => {
+  try {
+    const space = await Space.findById(req.params.id);
+    if (!space || !isMember(space, req.user.id)) return res.status(404).json({ error: "Space not found" });
+
+    if (!space.voiceRoom.active) {
+      space.voiceRoom.active = true;
+      space.voiceRoom.startedBy = req.user.id;
+      space.voiceRoom.startedAt = new Date();
+    }
+    const alreadyJoined = space.voiceRoom.participants.some((participant) => String(participant.user) === req.user.id);
+    if (!alreadyJoined) space.voiceRoom.participants.push({ user: req.user.id, muted: false });
+    await space.save();
+
+    const populated = await loadSpaceForViewer(space._id, req.user.id);
+    res.json(publicSpacePayload(populated, req.user.id));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to join voice room" });
+  }
+});
+
+router.post("/:id/voice-room/leave", auth, actionLimiter, [param("id").isMongoId()], validate, async (req, res) => {
+  try {
+    const space = await Space.findById(req.params.id);
+    if (!space || !isMember(space, req.user.id)) return res.status(404).json({ error: "Space not found" });
+
+    space.voiceRoom.participants = space.voiceRoom.participants.filter(
+      (participant) => String(participant.user) !== req.user.id
+    );
+    if (!space.voiceRoom.participants.length) {
+      space.voiceRoom.active = false;
+      space.voiceRoom.startedBy = null;
+      space.voiceRoom.startedAt = null;
+    }
+    await space.save();
+
+    const populated = await loadSpaceForViewer(space._id, req.user.id);
+    res.json(publicSpacePayload(populated, req.user.id));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to leave voice room" });
+  }
+});
+
+router.post("/:id/voice-room/mute", auth, actionLimiter, [
+  param("id").isMongoId(),
+  body("muted").isBoolean(),
+], validate, async (req, res) => {
+  try {
+    const space = await Space.findById(req.params.id);
+    if (!space || !isMember(space, req.user.id)) return res.status(404).json({ error: "Space not found" });
+
+    const participant = space.voiceRoom.participants.find((item) => String(item.user) === req.user.id);
+    if (!participant) return res.status(400).json({ error: "Join voice room first" });
+    participant.muted = Boolean(req.body.muted);
+    await space.save();
+
+    const populated = await loadSpaceForViewer(space._id, req.user.id);
+    res.json(publicSpacePayload(populated, req.user.id));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update voice room" });
   }
 });
 

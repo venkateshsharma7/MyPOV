@@ -57,8 +57,47 @@ export function sendSpaceMessage(spaceId, payload) {
   });
 }
 
+export function editSpaceMessage(spaceId, messageId, text) {
+  return apiFetch(`/spaces/${spaceId}/messages/${messageId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ text }),
+  });
+}
+
+export function reactToSpaceMessage(spaceId, messageId, emoji) {
+  return apiFetch(`/spaces/${spaceId}/messages/${messageId}/react`, {
+    method: "POST",
+    body: JSON.stringify({ emoji }),
+  });
+}
+
+export function starSpaceMessage(spaceId, messageId) {
+  return apiFetch(`/spaces/${spaceId}/messages/${messageId}/star`, {
+    method: "POST",
+  });
+}
+
 export function deleteSpaceMessage(spaceId, messageId) {
   return apiFetch(`/spaces/${spaceId}/messages/${messageId}`, {
     method: "DELETE",
+  });
+}
+
+export function joinVoiceRoom(spaceId) {
+  return apiFetch(`/spaces/${spaceId}/voice-room/join`, {
+    method: "POST",
+  });
+}
+
+export function leaveVoiceRoom(spaceId) {
+  return apiFetch(`/spaces/${spaceId}/voice-room/leave`, {
+    method: "POST",
+  });
+}
+
+export function muteVoiceRoom(spaceId, muted) {
+  return apiFetch(`/spaces/${spaceId}/voice-room/mute`, {
+    method: "POST",
+    body: JSON.stringify({ muted }),
   });
 }
