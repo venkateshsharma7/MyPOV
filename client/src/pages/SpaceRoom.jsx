@@ -43,6 +43,8 @@ function SpaceRoom() {
   const [inviteCode, setInviteCode] = useState("");
   const [inviteNames, setInviteNames] = useState("");
   const [sending, setSending] = useState(false);
+  const [mentionSuggestions, setMentionSuggestions] = useState([]);
+  const messageInputRef = useRef(null);
   const messageListRef = useRef(null);
   const messagesEndRef = useRef(null);
   const latestMessageRef = useRef("");
@@ -186,6 +188,7 @@ function SpaceRoom() {
         setMessages((prev) => [...prev, message]);
       }
       setText("");
+      setMentionSuggestions([]);
       setMediaUrl("");
       setKind("text");
       setReplyingTo(null);
@@ -205,6 +208,64 @@ function SpaceRoom() {
     setKind("text");
     setMediaUrl("");
     setText(message.text || "");
+    setMentionSuggestions([]);
+  }
+
+  function extractMentionQuery(value, cursorPosition) {
+    const upToCursor = value.slice(0, cursorPosition);
+    const match = /(^|\s)@([a-zA-Z0-9_]*)$/.exec(upToCursor);
+    return match ? match[2] : null;
+  }
+
+  function handleTextChange(event) {
+    const value = event.target.value;
+    setText(value);
+    handleTextCursor(event.target.selectionStart);
+  }
+
+  function handleTextCursor(cursorPosition) {
+    const query = extractMentionQuery(text, cursorPosition);
+    if (query === null || !space?.members) {
+      setMentionSuggestions([]);
+      return;
+    }
+
+    const lowerQuery = query.toLowerCase();
+    const usernames = (space.members || [])
+      .map((member) => member.user?.username)
+      .filter(Boolean)
+      .filter((username) => username !== user?.username);
+
+    const suggestions = usernames
+      .filter((username) => username.toLowerCase().startsWith(lowerQuery))
+      .slice(0, 6);
+
+    setMentionSuggestions(suggestions);
+  }
+
+  function insertMention(username) {
+    const input = messageInputRef.current;
+    if (!input) return;
+
+    const cursorPosition = input.selectionStart || text.length;
+    const beforeCursor = text.slice(0, cursorPosition);
+    const afterCursor = text.slice(cursorPosition);
+    const match = /(^|\s)@([a-zA-Z0-9_]*)$/.exec(beforeCursor);
+    if (!match) return;
+
+    const prefix = beforeCursor.slice(0, match.index);
+    const separator = match[1] || "";
+    const mentionText = `${separator}@${username} `;
+    const nextText = `${prefix}${mentionText}${afterCursor}`;
+
+    setText(nextText);
+    setMentionSuggestions([]);
+
+    window.requestAnimationFrame(() => {
+      const position = prefix.length + mentionText.length;
+      input.focus();
+      input.setSelectionRange(position, position);
+    });
   }
 
   async function handleReact(messageId, emoji) {
@@ -432,14 +493,33 @@ function SpaceRoom() {
                     />
                   )}
                   <div style={styles.composerRow}>
-                    <textarea
-                      value={text}
-                      onChange={(event) => setText(event.target.value)}
-                      placeholder="Drop your take..."
-                      rows={2}
-                      maxLength={2000}
-                      style={styles.messageInput}
-                    />
+                    <div style={styles.mentionComposer}>
+                      <textarea
+                        ref={messageInputRef}
+                        value={text}
+                        onChange={(event) => handleTextChange(event)}
+                        onClick={(event) => handleTextCursor(event.currentTarget.selectionStart)}
+                        onKeyUp={(event) => handleTextCursor(event.currentTarget.selectionStart)}
+                        placeholder="Drop your take..."
+                        rows={2}
+                        maxLength={2000}
+                        style={styles.messageInput}
+                      />
+                      {mentionSuggestions.length > 0 && (
+                        <div style={styles.mentionPopup}>
+                          {mentionSuggestions.map((username) => (
+                            <button
+                              key={username}
+                              type="button"
+                              onClick={() => insertMention(username)}
+                              style={styles.mentionItem}
+                            >
+                              @{username}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <button type="submit" disabled={sending || (!text.trim() && !mediaUrl.trim())} style={styles.sendButton}>
                       {sending ? "..." : editingMessage ? "Save" : "Send"}
                     </button>
@@ -751,6 +831,9 @@ const styles = {
   kindActive: { color: "#11131b", background: "#f5b850" },
   mediaInput: { width: "100%", marginBottom: 8, border: "1px solid rgba(255,255,255,.12)", background: "rgba(255,255,255,.06)", color: "#f7f3ea", borderRadius: 16, padding: "11px 12px", fontFamily: "'DM Mono', monospace" },
   composerRow: { display: "flex", gap: 9, alignItems: "stretch" },
+  mentionComposer: { position: "relative", flex: 1 },
+  mentionPopup: { position: "absolute", zIndex: 2, top: "100%", left: 0, right: 0, marginTop: 8, background: "rgba(15, 20, 34, 0.95)", border: "1px solid rgba(245,184,80,.2)", borderRadius: 16, boxShadow: "0 16px 30px rgba(0,0,0,.32)", maxHeight: 240, overflowY: "auto" },
+  mentionItem: { width: "100%", border: 0, background: "transparent", color: "#f7f3ea", textAlign: "left", padding: "12px 14px", cursor: "pointer", fontFamily: "'DM Mono', monospace", fontSize: 13 },
   messageInput: { flex: 1, resize: "none", border: "1px solid rgba(255,255,255,.12)", background: "rgba(255,255,255,.06)", color: "#f7f3ea", borderRadius: 18, padding: 12, fontFamily: "'DM Mono', monospace" },
   sendButton: { width: 96, border: 0, borderRadius: 18, background: "linear-gradient(135deg, #f5b850, #e55b86)", color: "#11131b", fontWeight: 900, cursor: "pointer" },
   sidebar: { display: "flex", flexDirection: "column", gap: 16 },
