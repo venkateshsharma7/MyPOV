@@ -40,6 +40,8 @@ import MoviePage from "./pages/MoviePage"
 import AIBot from "./pages/AIBot"
 import TasteDNA from "./pages/TasteDNA"
 import Splash from "./components/Splash"
+import Spaces from "./pages/Spaces"
+import SpaceRoom from "./pages/SpaceRoom"
 
 
 
@@ -253,6 +255,38 @@ element={
 <ProtectedRoute>
 
 <POVs />
+
+</ProtectedRoute>
+
+}
+
+/>
+
+<Route
+
+path="/spaces"
+
+element={
+
+<ProtectedRoute>
+
+<Spaces />
+
+</ProtectedRoute>
+
+}
+
+/>
+
+<Route
+
+path="/spaces/:id"
+
+element={
+
+<ProtectedRoute>
+
+<SpaceRoom />
 
 </ProtectedRoute>
 

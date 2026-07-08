@@ -28,6 +28,7 @@ import tmdbRoutes from "./routes/tmdb.js"
 
 import adminRoutes from "./routes/admin.js";
 import aiRoutes from "./routes/ai.js";
+import spaceRoutes from "./routes/spaces.js";
 
 
 
@@ -115,6 +116,7 @@ limit:"1mb"
 
 app.use("/api/admin", adminRoutes);
 app.use("/api/ai", aiRoutes);
+app.use("/api/spaces", spaceRoutes);
 
 
 app.use(

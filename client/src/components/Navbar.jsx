@@ -245,6 +245,9 @@ function Navbar() {
                   <Link to="/povs" style={navLinkClass("/povs")} {...linkHoverStyle} data-path="/povs">
                     POVs
                   </Link>
+                  <Link to="/spaces" style={navLinkClass("/spaces")} {...linkHoverStyle} data-path="/spaces">
+                    Spaces
+                  </Link>
                   <Link to="/log" style={navLinkClass("/log")} {...linkHoverStyle} data-path="/log">
                     Log
                   </Link>
@@ -386,6 +389,7 @@ function Navbar() {
                 <>
                   <Link to="/public" style={navLinkClass("/public")} onClick={() => setMobileMenuOpen(false)}>Public</Link>
                   <Link to="/povs" style={navLinkClass("/povs")} onClick={() => setMobileMenuOpen(false)}>POVs</Link>
+                  <Link to="/spaces" style={navLinkClass("/spaces")} onClick={() => setMobileMenuOpen(false)}>Spaces</Link>
                   <Link to="/log" style={navLinkClass("/log")} onClick={() => setMobileMenuOpen(false)}>Log</Link>
                   <Link to="/dashboard" style={navLinkClass("/dashboard")} onClick={() => setMobileMenuOpen(false)}>Dashboard</Link>
                   {user?.role === "admin" && (
