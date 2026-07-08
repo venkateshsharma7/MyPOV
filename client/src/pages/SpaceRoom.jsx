@@ -558,7 +558,7 @@ function MessageBubble({
         <p style={styles.deletedText}>This message was deleted</p>
       ) : (
         <>
-          {message.text && <p style={styles.messageText}>{message.text}</p>}
+          {message.text && <p style={styles.messageText}>{renderMessageText(message.text)}</p>}
           {message.mediaUrl && (
             message.kind === "gif" || message.kind === "image" ? (
               <img src={message.mediaUrl} alt={message.kind} style={styles.media} loading="lazy" />
@@ -594,6 +594,33 @@ function MessageBubble({
       )}
     </article>
   );
+}
+
+function renderMessageText(text) {
+  const mentionRegex = /@([a-zA-Z0-9_]+)/g;
+  const segments = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = mentionRegex.exec(text)) !== null) {
+    const start = match.index;
+    const end = mentionRegex.lastIndex;
+    if (start > lastIndex) {
+      segments.push(text.slice(lastIndex, start));
+    }
+    segments.push(
+      <span key={`${start}-${end}`} style={styles.mention}>
+        @{match[1]}
+      </span>
+    );
+    lastIndex = end;
+  }
+
+  if (lastIndex < text.length) {
+    segments.push(text.slice(lastIndex));
+  }
+
+  return segments.length > 0 ? segments : text;
 }
 
 function summarizeMessage(message) {
@@ -703,6 +730,7 @@ const styles = {
   messageMeta: { display: "flex", alignItems: "center", gap: 9, color: "rgba(247,243,234,.62)", fontFamily: "'DM Mono', monospace", fontSize: 11, marginBottom: 7 },
   replyPreview: { display: "grid", gap: 3, borderLeft: "3px solid #f5b850", background: "rgba(245,184,80,.09)", borderRadius: 12, padding: "8px 10px", marginBottom: 8, color: "rgba(247,243,234,.72)", fontFamily: "'DM Mono', monospace", fontSize: 11 },
   messageText: { margin: 0, whiteSpace: "pre-wrap", color: "#f7f3ea", lineHeight: 1.55, fontSize: 14, fontWeight: 650 },
+  mention: { color: "#f5b850", fontWeight: 700, background: "rgba(245,184,80,.12)", borderRadius: 5, padding: "0 4px" },
   deletedText: { margin: 0, color: "rgba(247,243,234,.42)", fontFamily: "'DM Mono', monospace", fontStyle: "italic", fontSize: 13 },
   deleteButton: { marginLeft: "auto", border: 0, background: "transparent", color: "rgba(248,113,113,.8)", cursor: "pointer", fontFamily: "'DM Mono', monospace", fontSize: 10 },
   media: { display: "block", marginTop: 9, maxWidth: "100%", maxHeight: 360, borderRadius: 16, border: "1px solid rgba(255,255,255,.12)", objectFit: "contain" },
