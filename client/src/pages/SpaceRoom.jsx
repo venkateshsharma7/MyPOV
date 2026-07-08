@@ -14,6 +14,7 @@ import {
   muteVoiceRoom,
   reactToSpaceMessage,
   sendSpaceMessage,
+  setSpaceTyping,
   starSpaceMessage,
 } from "../api/spaces";
 
@@ -42,8 +43,12 @@ function SpaceRoom() {
   const [inviteCode, setInviteCode] = useState("");
   const [inviteNames, setInviteNames] = useState("");
   const [sending, setSending] = useState(false);
+  const messageListRef = useRef(null);
   const messagesEndRef = useRef(null);
   const latestMessageRef = useRef("");
+  const stickToBottomRef = useRef(true);
+  const typingRef = useRef(false);
+  const typingStopTimerRef = useRef(null);
 
   useEffect(() => {
     loadRoom();
@@ -59,9 +64,31 @@ function SpaceRoom() {
   }, [space?._id, space?.viewer?.isMember]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    if (stickToBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
     latestMessageRef.current = messages[messages.length - 1]?.createdAt || "";
   }, [messages]);
+
+  useEffect(() => {
+    const isTyping = Boolean(space?.viewer?.isMember && !editingMessage && (text.trim() || (kind !== "text" && mediaUrl.trim())));
+    updateTypingStatus(isTyping);
+
+    if (isTyping) {
+      clearTimeout(typingStopTimerRef.current);
+      typingStopTimerRef.current = setTimeout(() => updateTypingStatus(false), 2800);
+    }
+
+    return () => clearTimeout(typingStopTimerRef.current);
+  }, [text, mediaUrl, kind, editingMessage, space?.viewer?.isMember]);
+
+  useEffect(() => {
+    return () => {
+      if (typingRef.current) {
+        setSpaceTyping(id, false).catch(() => {});
+      }
+    };
+  }, [id]);
 
   async function loadRoom() {
     try {
@@ -101,6 +128,23 @@ function SpaceRoom() {
     } catch {
       // Polling refreshes should not interrupt chat.
     }
+  }
+
+  async function updateTypingStatus(isTyping) {
+    if (typingRef.current === isTyping || !space?.viewer?.isMember) return;
+    typingRef.current = isTyping;
+    try {
+      const data = await setSpaceTyping(id, isTyping);
+      setSpace(data);
+    } catch {
+      typingRef.current = !isTyping;
+    }
+  }
+
+  function handleMessageListScroll(event) {
+    const node = event.currentTarget;
+    const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
+    stickToBottomRef.current = distanceFromBottom < 120;
   }
 
   async function handleJoin() {
@@ -146,6 +190,8 @@ function SpaceRoom() {
       setKind("text");
       setReplyingTo(null);
       setEditingMessage(null);
+      updateTypingStatus(false);
+      stickToBottomRef.current = true;
     } catch (err) {
       setError(err.message || "Could not send message");
     } finally {
@@ -313,7 +359,10 @@ function SpaceRoom() {
               </div>
             ) : (
               <>
-                <div style={styles.messageList}>
+                <div style={styles.chatStatus}>
+                  <span>{typingLabel(space?.typingUsers || []) || " "}</span>
+                </div>
+                <div ref={messageListRef} onScroll={handleMessageListScroll} style={styles.messageList}>
                   {messages.length === 0 ? (
                     <div style={styles.emptyChat}>
                       <h2>Start the war, but keep it JFF.</h2>
@@ -565,12 +614,24 @@ function groupReactions(reactions) {
   return Array.from(map.entries()).map(([emoji, count]) => ({ emoji, count }));
 }
 
+function typingLabel(typingUsers) {
+  const names = typingUsers
+    .map((item) => item.user?.username)
+    .filter(Boolean)
+    .slice(0, 3);
+
+  if (!names.length) return "";
+  if (names.length === 1) return `${names[0]} is typing...`;
+  if (names.length === 2) return `${names[0]} and ${names[1]} are typing...`;
+  return `${names[0]} and ${names.length - 1} others are typing...`;
+}
+
 const globalStyles = `
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=DM+Mono:wght@300;400;500&family=Cinzel:wght@400;600&display=swap');
   input:focus, textarea:focus { outline: 1px solid rgba(212,175,55,.45); }
   @media (max-width: 860px) {
     .space-room-layout { grid-template-columns: 1fr !important; }
-    .space-chat-panel { min-height: 560px !important; }
+    .space-chat-panel { height: 72vh !important; min-height: 520px !important; }
     .space-sidebar { order: -1; }
   }
   @media (max-width: 560px) {
@@ -606,8 +667,9 @@ const styles = {
   secondaryButton: { border: "1px solid rgba(212,175,55,.28)", background: "rgba(7,6,10,.6)", color: "#d4af37", borderRadius: 8, padding: "10px 14px", fontFamily: "'Cinzel', serif", letterSpacing: ".12em", textTransform: "uppercase", fontWeight: 700, cursor: "pointer", fontSize: 12 },
   teamBar: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderTop: "1px solid rgba(212,175,55,.18)", paddingTop: 14, fontFamily: "'DM Mono', monospace", color: "rgba(245,240,232,.8)" },
   layout: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 300px", gap: 16 },
-  chatPanel: { minHeight: 620, border: "1px solid rgba(212,175,55,.16)", background: "rgba(255,255,255,.035)", borderRadius: 8, overflow: "hidden", display: "flex", flexDirection: "column" },
-  messageList: { flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 12 },
+  chatPanel: { height: "min(760px, calc(100vh - 120px))", minHeight: 620, border: "1px solid rgba(212,175,55,.16)", background: "rgba(255,255,255,.035)", borderRadius: 8, overflow: "hidden", display: "flex", flexDirection: "column" },
+  chatStatus: { minHeight: 30, display: "flex", alignItems: "center", padding: "0 16px", borderBottom: "1px solid rgba(212,175,55,.1)", background: "rgba(7,6,10,.55)", color: "#d4af37", fontFamily: "'DM Mono', monospace", fontSize: 11, fontStyle: "italic" },
+  messageList: { flex: 1, minHeight: 0, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 12, overscrollBehavior: "contain" },
   locked: { minHeight: 500, display: "grid", placeItems: "center", textAlign: "center", padding: 24, fontFamily: "'DM Mono', monospace", color: "rgba(245,240,232,.72)" },
   emptyChat: { margin: "auto", textAlign: "center", color: "rgba(245,240,232,.62)", fontFamily: "'DM Mono', monospace" },
   message: { maxWidth: "min(620px, 92%)", alignSelf: "flex-start", border: "1px solid rgba(212,175,55,.16)", background: "rgba(7,6,10,.7)", borderRadius: 8, padding: 12 },

@@ -57,6 +57,13 @@ export function sendSpaceMessage(spaceId, payload) {
   });
 }
 
+export function setSpaceTyping(spaceId, typing) {
+  return apiFetch(`/spaces/${spaceId}/typing`, {
+    method: "POST",
+    body: JSON.stringify({ typing }),
+  });
+}
+
 export function editSpaceMessage(spaceId, messageId, text) {
   return apiFetch(`/spaces/${spaceId}/messages/${messageId}`, {
     method: "PATCH",

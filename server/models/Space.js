@@ -59,6 +59,21 @@ const voiceParticipantSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const typingUserSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    lastTypedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false }
+);
+
 const spaceSchema = new mongoose.Schema(
   {
     name: {
@@ -144,6 +159,10 @@ const spaceSchema = new mongoose.Schema(
         type: [voiceParticipantSchema],
         default: [],
       },
+    },
+    typingUsers: {
+      type: [typingUserSchema],
+      default: [],
     },
   },
   { timestamps: true }

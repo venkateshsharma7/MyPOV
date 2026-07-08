@@ -44,6 +44,11 @@ function publicSpacePayload(space, userId) {
   const members = Array.isArray(space.members) ? space.members : [];
   const role = memberRole(space, userId);
   const voiceParticipants = Array.isArray(space.voiceRoom?.participants) ? space.voiceRoom.participants : [];
+  const typingCutoff = Date.now() - 7000;
+  const typingUsers = (Array.isArray(space.typingUsers) ? space.typingUsers : []).filter((item) => {
+    const lastTypedAt = item.lastTypedAt ? new Date(item.lastTypedAt).getTime() : 0;
+    return lastTypedAt > typingCutoff && String(item.user?._id || item.user) !== userId;
+  });
   return {
     _id: space._id,
     name: space.name,
@@ -65,6 +70,7 @@ function publicSpacePayload(space, userId) {
       participantCount: voiceParticipants.length,
       viewerInVoice: voiceParticipants.some((participant) => String(participant.user?._id || participant.user) === userId),
     },
+    typingUsers,
     createdAt: space.createdAt,
     updatedAt: space.updatedAt,
     viewer: {
@@ -92,6 +98,7 @@ async function loadSpaceForViewer(spaceId, userId) {
     .populate("invitedUsers.user", "username")
     .populate("voiceRoom.startedBy", "username")
     .populate("voiceRoom.participants.user", "username")
+    .populate("typingUsers.user", "username")
     .lean();
 
   if (!space || !canViewSpace(space, userId)) return null;
@@ -136,6 +143,7 @@ router.get(
       const spaces = await Space.find(baseQuery)
         .populate("owner", "username")
         .populate("members.user", "username")
+        .populate("typingUsers.user", "username")
         .sort({ lastMessageAt: -1, updatedAt: -1 })
         .limit(60)
         .lean();
@@ -365,6 +373,7 @@ router.post(
       });
 
       space.lastMessageAt = new Date();
+      space.typingUsers = space.typingUsers.filter((item) => String(item.user) !== req.user.id);
       await space.save();
 
       const populated = await SpaceMessage.findById(message._id)
@@ -381,6 +390,32 @@ router.post(
     }
   }
 );
+
+router.post("/:id/typing", auth, [
+  param("id").isMongoId(),
+  body("typing").isBoolean(),
+], validate, async (req, res) => {
+  try {
+    const space = await Space.findById(req.params.id);
+    if (!space || !isMember(space, req.user.id)) return res.status(404).json({ error: "Space not found" });
+
+    const cutoff = Date.now() - 10000;
+    space.typingUsers = space.typingUsers.filter((item) => {
+      const lastTypedAt = item.lastTypedAt ? new Date(item.lastTypedAt).getTime() : 0;
+      return lastTypedAt > cutoff && String(item.user) !== req.user.id;
+    });
+
+    if (Boolean(req.body.typing)) {
+      space.typingUsers.push({ user: req.user.id, lastTypedAt: new Date() });
+    }
+
+    await space.save();
+    const populated = await loadSpaceForViewer(space._id, req.user.id);
+    res.json(publicSpacePayload(populated, req.user.id));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update typing status" });
+  }
+});
 
 router.patch("/:id/messages/:messageId", auth, actionLimiter, [
   param("id").isMongoId(),
